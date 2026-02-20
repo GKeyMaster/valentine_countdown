@@ -107,6 +107,33 @@ Uses pre-generated data artifacts for stable, network-free builds.
 
 - **Frontend:** Vite + React + TypeScript
 - **3D Engine:** CesiumJS (tokenless, no Cesium Ion)
-- **Imagery:** NASA GIBS (Blue Marble + VIIRS City Lights)
+- **Imagery:** NASA GIBS (Blue Marble) + OSM (street tiles)
 - **Building Data:** OpenStreetMap via Overpass API
 - **Deployment:** Cloudflare Pages / Vercel compatible
+
+## Tokenless Mode
+
+This app runs **without Cesium Ion** — no tokens, no Ion API.
+
+**Providers in use:**
+- **Terrain:** `EllipsoidTerrainProvider`
+- **Imagery (overview):** NASA GIBS Blue Marble
+- **Imagery (venue):** OpenStreetMap raster tiles
+- **Buildings:** GeoJSON from Overpass API
+
+**Do NOT add:**
+- `Cesium.Ion.defaultAccessToken`
+- `createWorldTerrain()`
+- Ion imagery or 3D tiles
+- Any Ion assets
+
+**Dev guardrails:** In development, the app warns in the console if an Ion token is set or if requests hit `api.cesium.com` / `ion.cesium.com`.
+
+## Tokenless Verification Checklist
+
+Before release, verify no Ion usage:
+
+1. Open DevTools → Network tab
+2. Filter by `cesium` or search for `ion`
+3. Confirm **no** requests to `api.cesium.com` or `ion.cesium.com`
+4. Confirm no `access_token` in request URLs

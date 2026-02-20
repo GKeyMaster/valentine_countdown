@@ -4,7 +4,8 @@ import {
   UrlTemplateImageryProvider,
   WebMercatorTilingScheme,
   Rectangle,
-  Credit
+  Credit,
+  JulianDate
 } from 'cesium'
 
 export function createViewer(container: HTMLElement): Viewer {
@@ -44,21 +45,36 @@ export function createViewer(container: HTMLElement): Viewer {
     credit: new Credit('NASA EOSDIS GIBS')
   })
 
-  // Add NASA imagery as the ONLY base layer
-  const imageryLayer = viewer.imageryLayers.addImageryProvider(nasaImageryProvider)
+  // Add NASA day imagery as the base layer
+  viewer.imageryLayers.addImageryProvider(nasaImageryProvider)
+
+  // Create NASA night lights imagery provider
+  const nightImageryProvider = new UrlTemplateImageryProvider({
+    url: 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_CityLights_2012/default/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpg',
+    minimumLevel: 1,
+    maximumLevel: 8,
+    tilingScheme: new WebMercatorTilingScheme(),
+    rectangle: Rectangle.fromDegrees(-180, -85.05112878, 180, 85.05112878),
+    credit: new Credit('NASA EOSDIS GIBS')
+  })
+
+  // Add night lights layer with day/night blending
+  const nightImageryLayer = viewer.imageryLayers.addImageryProvider(nightImageryProvider)
   
-  // Enable anisotropic filtering for better quality
-  if (imageryLayer.imageryProvider && (imageryLayer.imageryProvider as any).enablePickFeatures !== undefined) {
-    // Enable anisotropic filtering if available
-    const provider = imageryLayer.imageryProvider as any
-    if (provider._texture) {
-      provider._texture.sampler = {
-        ...provider._texture.sampler,
-        magFilter: 9729, // LINEAR
-        minFilter: 9987, // LINEAR_MIPMAP_LINEAR
-        maximumAnisotropy: 16
-      }
-    }
+  // Configure night lights blending
+  nightImageryLayer.dayAlpha = 0.0  // Invisible during day
+  nightImageryLayer.nightAlpha = 1.0  // Fully visible at night
+  nightImageryLayer.alpha = 0.85  // Overall opacity for tasteful glow
+  nightImageryLayer.brightness = 1.1  // Slight brightness boost
+  nightImageryLayer.contrast = 1.2  // Enhanced contrast
+  nightImageryLayer.gamma = 0.9  // Slight gamma adjustment for glow
+
+  // Enable globe lighting for day/night cycle
+  viewer.scene.globe.enableLighting = true
+  
+  // Enable dynamic atmosphere lighting if available
+  if (viewer.scene.globe.dynamicAtmosphereLighting !== undefined) {
+    viewer.scene.globe.dynamicAtmosphereLighting = true
   }
 
   // Premium globe visual settings
@@ -70,9 +86,12 @@ export function createViewer(container: HTMLElement): Viewer {
     viewer.scene.postProcessStages.fxaa.enabled = true
   }
 
-  // DEV-ONLY: Verification logging
+  // Store night layer reference for UI toggle
+  ;(viewer as any).nightImageryLayer = nightImageryLayer
+
+  // DEV-ONLY: Verification logging and debug helpers
   if (import.meta.env.DEV) {
-    console.log('🌍 Cesium Viewer Initialized - Tokenless EPSG:3857 Configuration')
+    console.log('🌍 Cesium Viewer Initialized - Tokenless EPSG:3857 with Night Lights')
     
     // Check for unwanted providers
     const layers = viewer.imageryLayers
@@ -98,7 +117,8 @@ export function createViewer(container: HTMLElement): Viewer {
       if (hasBannedDomain) {
         console.warn('⚠️ UNWANTED IMAGERY PROVIDER DETECTED:', url)
       } else {
-        console.log(`✅ Layer ${i}: ${provider.constructor.name}`)
+        const layerType = url.includes('CityLights') ? '🌃 Night' : '🌅 Day'
+        console.log(`✅ Layer ${i} ${layerType}: ${provider.constructor.name}`)
         if (url) {
           console.log(`   URL: ${url}`)
         }
@@ -107,13 +127,36 @@ export function createViewer(container: HTMLElement): Viewer {
         if (providerAny.minimumLevel !== undefined) {
           console.log(`   Level Range: ${providerAny.minimumLevel}-${providerAny.maximumLevel}`)
         }
+        if (layer.dayAlpha !== undefined) {
+          console.log(`   Day/Night Alpha: ${layer.dayAlpha}/${layer.nightAlpha}`)
+        }
       }
     }
     
     console.log(`📊 Total imagery layers: ${layers.length}`)
     console.log(`🎨 HDR enabled: ${viewer.scene.highDynamicRange}`)
+    console.log(`🌞 Lighting enabled: ${viewer.scene.globe.enableLighting}`)
+    console.log(`🌌 Dynamic atmosphere: ${viewer.scene.globe.dynamicAtmosphereLighting || 'N/A'}`)
     console.log(`🔍 Screen space error: ${viewer.scene.globe.maximumScreenSpaceError}`)
     console.log(`✨ FXAA enabled: ${viewer.scene.postProcessStages?.fxaa?.enabled || false}`)
+
+    // Debug helper: Set time to show night side over major cities
+    ;(window as any).setNightTime = () => {
+      // Set to midnight UTC (shows night over Europe/Africa)
+      const currentDate = viewer.clock.currentTime.toString().split('T')[0]
+      viewer.clock.currentTime = JulianDate.fromIso8601(`${currentDate}T00:00:00Z`)
+      console.log('🌙 Time set to midnight UTC (night over Europe/Africa)')
+    }
+
+    // Debug helper: Set time to show day side
+    ;(window as any).setDayTime = () => {
+      // Set to noon UTC (shows day over Europe/Africa)
+      const currentDate = viewer.clock.currentTime.toString().split('T')[0]
+      viewer.clock.currentTime = JulianDate.fromIso8601(`${currentDate}T12:00:00Z`)
+      console.log('☀️ Time set to noon UTC (day over Europe/Africa)')
+    }
+
+    console.log('🔧 Debug helpers available: setNightTime(), setDayTime()')
   }
 
   return viewer

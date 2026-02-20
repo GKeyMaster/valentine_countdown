@@ -39,7 +39,9 @@ export async function createViewer(container: HTMLElement): Promise<Cesium.Viewe
   const globe = scene.globe
   
   // Enable atmosphere and lighting
-  scene.skyAtmosphere.show = true
+  if (scene.skyAtmosphere) {
+    scene.skyAtmosphere.show = true
+  }
   scene.fog.enabled = true
   scene.fog.density = 0.0001
   

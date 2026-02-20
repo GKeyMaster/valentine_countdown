@@ -256,21 +256,7 @@ body {
   margin-left: var(--spacing-xs);
 }
 
-/* Header Styles */
-.header-title {
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-  line-height: var(--line-height-tight);
-  letter-spacing: -0.025em;
-}
-
-.header-subtitle {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  font-weight: var(--font-weight-normal);
-  margin-top: var(--spacing-xs);
-}
+/* Legacy header styles - replaced by layout.css main-header styles */
 
 /* Animations */
 @keyframes fadeInUp {

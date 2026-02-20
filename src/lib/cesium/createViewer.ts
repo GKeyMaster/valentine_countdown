@@ -24,10 +24,8 @@ export function createViewer({ container }: ViewerOptions): Viewer {
 
   // Create the viewer with minimal UI
   const viewer = new Viewer(container, {
-    // Terrain and imagery
+    // Terrain
     terrainProvider,
-    baseLayerPicker: false,
-    imageryProvider,
     
     // Disable UI elements
     animation: false,
@@ -35,6 +33,7 @@ export function createViewer({ container }: ViewerOptions): Viewer {
     geocoder: false,
     homeButton: false,
     sceneModePicker: false,
+    baseLayerPicker: false,
     navigationHelpButton: false,
     fullscreenButton: false,
     

@@ -2,10 +2,11 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Viewer } from 'cesium'
 import { createViewer } from '../lib/cesium/createViewer'
 import { VenueMarkerManager } from '../lib/cesium/markerUtils'
+import { PremiumCameraManager } from '../lib/cesium/cameraUtils'
 import type { Stop } from '../lib/data/types'
 
 interface GlobeProps {
-  onReady?: (viewer: Viewer) => void
+  onReady?: (viewer: Viewer, cameraManager: PremiumCameraManager) => void
   onImageryReady?: () => void
   hideUntilReady?: boolean
   stops?: Stop[]
@@ -25,13 +26,14 @@ export function Globe({
   const creditContainerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Viewer | null>(null)
   const markerManagerRef = useRef<VenueMarkerManager | null>(null)
+  const cameraManagerRef = useRef<PremiumCameraManager | null>(null)
   const initOnceRef = useRef(false)
   const [isReady, setIsReady] = useState(false)
 
   // Stable callback to avoid recreating the onReady function
-  const onReadyCallback = useCallback((viewer: Viewer) => {
+  const onReadyCallback = useCallback((viewer: Viewer, cameraManager: PremiumCameraManager) => {
     console.log('[Cesium] Globe ready for interactions')
-    onReady?.(viewer)
+    onReady?.(viewer, cameraManager)
   }, [onReady])
 
   // Initialize Cesium viewer ONCE
@@ -68,13 +70,21 @@ export function Globe({
         
         setIsReady(true)
         
+        // Initialize camera manager
+        cameraManagerRef.current = new PremiumCameraManager(result.viewer)
+        
         // Initialize marker manager
         markerManagerRef.current = new VenueMarkerManager(result.viewer)
         if (onSelectStop) {
           markerManagerRef.current.setOnMarkerClick(onSelectStop)
         }
         
-        onReadyCallback(result.viewer)
+        // Set initial camera position if we have stops
+        if (stops.length > 0) {
+          cameraManagerRef.current.setInitialPosition(stops)
+        }
+        
+        onReadyCallback(result.viewer, cameraManagerRef.current!)
       } catch (error) {
         console.error('Failed to initialize Cesium viewer:', error)
         setIsReady(true) // Show something even if failed
@@ -86,6 +96,10 @@ export function Globe({
     // Cleanup on unmount
     return () => {
       console.log('[Cesium] destroy viewer')
+      if (cameraManagerRef.current) {
+        cameraManagerRef.current.cancelFlight()
+        cameraManagerRef.current = null
+      }
       if (markerManagerRef.current) {
         markerManagerRef.current.destroy()
         markerManagerRef.current = null
@@ -100,9 +114,9 @@ export function Globe({
 
   // Separate effect to handle onReady callback changes
   useEffect(() => {
-    if (isReady && viewerRef.current) {
+    if (isReady && viewerRef.current && cameraManagerRef.current) {
       console.log('[Cesium] Calling onReady callback (viewer already exists)')
-      onReadyCallback(viewerRef.current)
+      onReadyCallback(viewerRef.current, cameraManagerRef.current!)
     }
   }, [onReadyCallback, isReady])
 
@@ -114,6 +128,17 @@ export function Globe({
     }
   }, [stops, selectedStopId])
 
+  // Set initial overview position when stops are first loaded
+  useEffect(() => {
+    if (cameraManagerRef.current && stops.length > 0 && isReady && !selectedStopId) {
+      console.log('[Globe] Setting initial overview position for stops')
+      // Small delay to ensure everything is initialized
+      setTimeout(() => {
+        cameraManagerRef.current?.flyToOverview(stops, 2.5)
+      }, 500)
+    }
+  }, [stops, isReady, selectedStopId])
+
   // Update marker click callback when onSelectStop changes
   useEffect(() => {
     if (markerManagerRef.current && onSelectStop) {
@@ -121,15 +146,19 @@ export function Globe({
     }
   }, [onSelectStop])
 
-  // Fly to selected marker when selection changes
+  // Fly to selected stop when selection changes (using premium camera)
   useEffect(() => {
-    if (markerManagerRef.current && selectedStopId && isReady) {
-      // Small delay to ensure marker is updated first
-      setTimeout(() => {
-        markerManagerRef.current?.flyToMarker(selectedStopId, 1.5)
-      }, 100)
+    if (cameraManagerRef.current && selectedStopId && stops.length > 0 && isReady) {
+      const selectedStop = stops.find(stop => stop.id === selectedStopId)
+      if (selectedStop) {
+        // Small delay to ensure marker is updated first and for premium feel
+        setTimeout(() => {
+          console.log(`[Globe] Flying to selected stop: ${selectedStop.city}`)
+          cameraManagerRef.current?.flyToStop(selectedStop, 2.0) // Slightly longer for cinematic feel
+        }, 150)
+      }
     }
-  }, [selectedStopId, isReady])
+  }, [selectedStopId, stops, isReady])
 
   return (
     <>

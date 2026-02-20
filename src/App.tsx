@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { Viewer } from 'cesium'
+import type { PremiumCameraManager } from './lib/cesium/cameraUtils'
 import { Globe } from './components/Globe'
 import { HeaderBar } from './components/HeaderBar'
 import { StopList } from './components/StopList'
@@ -20,6 +21,7 @@ function App() {
   const [scenario, setScenario] = useState<Scenario>('base')
   const [error, setError] = useState<string | null>(null)
   const [, setViewer] = useState<Viewer | null>(null)
+  const [cameraManager, setCameraManager] = useState<PremiumCameraManager | null>(null)
   
   // Premium loading state machine
   const [loadingStage, setLoadingStage] = useState<LoadingStage>('boot')
@@ -81,13 +83,26 @@ function App() {
 
   const selectedStop = stops.find(stop => stop.id === selectedStopId) || null
 
+  // Enhanced stop selection with camera motion
+  const handleStopSelection = useCallback((stopId: string) => {
+    const stop = stops.find(s => s.id === stopId)
+    if (stop && cameraManager) {
+      console.log(`[App] Selecting stop: ${stop.city} - ${stop.venue}`)
+      setSelectedStopId(stopId)
+      // Camera will fly via the useEffect in Globe.tsx
+    } else {
+      setSelectedStopId(stopId)
+    }
+  }, [stops, cameraManager])
+
   const handleImageryReady = useCallback(() => {
     console.log('[App] Imagery preload completed')
     setImageryReady(true)
   }, [])
 
-  const handleGlobeReady = useCallback((cesiumViewer: Viewer) => {
+  const handleGlobeReady = useCallback((cesiumViewer: Viewer, premiumCameraManager: PremiumCameraManager) => {
     setViewer(cesiumViewer)
+    setCameraManager(premiumCameraManager)
     console.log('[App] Globe ready for interactions')
     
     // Listen for first frame rendered
@@ -162,7 +177,7 @@ function App() {
         hideUntilReady={showLoader}
         stops={stops}
         selectedStopId={selectedStopId}
-        onSelectStop={setSelectedStopId}
+        onSelectStop={handleStopSelection}
       />
       
       {/* Premium Layout System */}
@@ -189,7 +204,7 @@ function App() {
           <StopList 
             stops={stops}
             selectedStopId={selectedStopId}
-            onSelectStop={setSelectedStopId}
+            onSelectStop={handleStopSelection}
           />
           <ScenarioToggle 
             scenario={scenario}

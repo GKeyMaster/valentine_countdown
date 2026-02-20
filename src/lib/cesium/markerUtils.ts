@@ -213,22 +213,10 @@ export class VenueMarkerManager {
   }
 
   /**
-   * Flies to a specific marker
+   * Gets a marker by stop ID
    */
-  flyToMarker(stopId: string, duration = 2.0): void {
-    const marker = this.markers.get(stopId)
-    if (marker && marker.position) {
-      console.log(`[Markers] Flying to marker: ${stopId}`)
-      
-      this.viewer.flyTo(marker, {
-        duration: duration,
-        offset: {
-          heading: 0,
-          pitch: -0.5, // Look down at an angle
-          range: 2000000 // 2000km distance
-        }
-      })
-    }
+  getMarker(stopId: string): Entity | undefined {
+    return this.markers.get(stopId)
   }
 
   /**

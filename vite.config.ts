@@ -30,5 +30,18 @@ export default defineConfig({
   define: {
     // Define Cesium base URL for static assets
     CESIUM_BASE_URL: JSON.stringify('/cesium/')
+  },
+  build: {
+    // Optimize for Vercel deployment
+    target: 'es2015',
+    minify: 'esbuild',
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          cesium: ['cesium']
+        }
+      }
+    }
   }
 })

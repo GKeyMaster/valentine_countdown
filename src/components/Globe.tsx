@@ -207,7 +207,7 @@ export function Globe({
     if (viewerRef.current && selectedStopId && stops.length > 0 && isReady) {
       const selectedStop = stops.find(stop => stop.id === selectedStopId)
       if (selectedStop && selectedStop.lat && selectedStop.lng) {
-        console.log(`[Globe] Flying to selected stop: ${selectedStop.city}`)
+        console.log(`[FlyTo] ${selectedStop.id} ${selectedStop.lat} ${selectedStop.lng}`)
         
         // Try to find marker entity first
         const markerEntity = markerManagerRef.current?.getMarkerEntity?.(selectedStopId)
@@ -221,7 +221,7 @@ export function Globe({
           )
           viewerRef.current.flyTo(markerEntity, { duration: 2.0, offset })
         } else {
-          // Fallback to camera.flyTo
+          // Fallback to camera.flyTo (ensure lng, lat, height order)
           viewerRef.current.camera.flyTo({
             destination: Cartesian3.fromDegrees(selectedStop.lng, selectedStop.lat, 3500),
             orientation: { 

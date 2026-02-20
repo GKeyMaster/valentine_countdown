@@ -28,6 +28,9 @@ export async function createViewer(container: HTMLElement, creditContainer?: HTM
     // Terrain
     terrainProvider,
     
+    // Prevent default imagery (no Bing/Ion)
+    imageryProvider: false,
+    
     // Disable UI clutter
     animation: false,
     timeline: false,
@@ -53,14 +56,15 @@ export async function createViewer(container: HTMLElement, creditContainer?: HTM
   viewer.screenSpaceEventHandler.removeInputAction(ScreenSpaceEventType.LEFT_CLICK)
   viewer.screenSpaceEventHandler.removeInputAction(ScreenSpaceEventType.LEFT_DOUBLE_CLICK)
 
-  // Create NASA GIBS WMTS imagery provider (tokenless, free)
+  // Create NASA GIBS WMTS imagery provider using REST template (tokenless, free)
   const gibs = new WebMapTileServiceImageryProvider({
-    url: "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/wmts.cgi",
+    // RESTful WMTS template. Use "default" time (supported by GIBS) and 500m matrix set.
+    url: "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/BlueMarble_ShadedRelief_Bathymetry/default/default/500m/{TileMatrix}/{TileRow}/{TileCol}.jpg",
     layer: "BlueMarble_ShadedRelief_Bathymetry",
     style: "default",
     format: "image/jpeg",
-    tileMatrixSetID: "EPSG4326_500m",
-    maximumLevel: 8,
+    tileMatrixSetID: "500m",
+    maximumLevel: 7,
     tilingScheme: new GeographicTilingScheme({
       numberOfLevelZeroTilesX: 2,
       numberOfLevelZeroTilesY: 1,
@@ -68,10 +72,15 @@ export async function createViewer(container: HTMLElement, creditContainer?: HTM
     credit: new Credit("NASA GIBS"),
   })
 
-  // Add single imagery layer
+  // Add error event listener to log tile errors
+  gibs.errorEvent.addEventListener((e: any) => console.warn("[GIBS] tile error", e))
+
+  // GUARANTEE no Ion imagery remains and add ONLY GIBS provider
+  viewer.imageryLayers.removeAll(true)
   viewer.imageryLayers.addImageryProvider(gibs)
 
   // Premium atmosphere settings (tokenless)
+  viewer.scene.globe.show = true
   viewer.scene.skyAtmosphere.show = true
   viewer.scene.fog.enabled = true
   viewer.scene.globe.showGroundAtmosphere = true

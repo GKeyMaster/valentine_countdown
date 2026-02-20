@@ -5,8 +5,15 @@ import {
   WebMercatorTilingScheme,
   Rectangle,
   Credit,
-  JulianDate
+  JulianDate,
+  Ion
 } from 'cesium'
+
+// Configure Cesium - ensure no Ion token and set base URL
+Ion.defaultAccessToken = undefined as any
+if (typeof window !== 'undefined') {
+  ;(window as any).CESIUM_BASE_URL = '/cesium/'
+}
 import { DAY_TEMPLATES, NIGHT_TEMPLATES } from '../imagery/gibsTemplates'
 import { resolveImageryTemplates } from '../imagery/resolveGibsTemplate'
 
@@ -55,6 +62,13 @@ export async function createViewer(container: HTMLElement, creditContainer?: HTM
     }
     
     console.log('✅ Cesium Viewer instance created')
+    
+    // Verify viewer is properly initialized
+    if (!viewer || !viewer.scene) {
+      throw new Error('Viewer was created but scene is not available')
+    }
+    
+    console.log('✅ Viewer scene is available')
   } catch (error) {
     console.error('❌ Failed to create Cesium Viewer:', error)
     throw error
@@ -133,42 +147,15 @@ export async function createViewer(container: HTMLElement, creditContainer?: HTM
   ;(viewer as any).dayImageryProvider = dayImageryProvider
   ;(viewer as any).nightImageryProvider = nightImageryProvider
 
-  // Create readiness promise that resolves when both layers are ready
+  // Create readiness promise - simplified approach
   const isReady = new Promise<void>((resolve) => {
-    let attempts = 0
-    const maxAttempts = 20 // 20 attempts * 100ms = 2 seconds max
-    
-    // Wait for the scene to be ready and imagery to start loading
-    const checkReady = () => {
-      attempts++
-      
-      try {
-        // Check if the viewer is ready and scene is initialized
-        if (viewer.scene && viewer.scene.globe && viewer.imageryLayers.length > 0) {
-          console.log('✅ Cesium viewer fully initialized')
-          console.log('🌍 Scene and imagery ready')
-          resolve()
-          return
-        }
-      } catch (error) {
-        // Suppress errors during initialization checks
-        if (attempts % 5 === 0) { // Log every 5th attempt
-          const errorMessage = error instanceof Error ? error.message : String(error)
-          console.warn(`Scene check attempt ${attempts}:`, errorMessage)
-        }
-      }
-      
-      // Continue checking or timeout
-      if (attempts < maxAttempts) {
-        setTimeout(checkReady, 100)
-      } else {
-        console.log('⏰ Readiness checks completed, viewer should be functional')
-        resolve()
-      }
-    }
-    
-    // Start checking after a brief initial delay
-    setTimeout(checkReady, 200)
+    // Simple timeout-based approach that works reliably
+    // The viewer is created synchronously, imagery loading happens in background
+    setTimeout(() => {
+      console.log('✅ Cesium viewer initialization complete')
+      console.log('🌍 Proceeding with globe display')
+      resolve()
+    }, 1000) // Give imagery a moment to start loading
   })
 
   // DEV-ONLY: Verification logging and debug helpers

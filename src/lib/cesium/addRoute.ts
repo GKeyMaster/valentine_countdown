@@ -78,17 +78,11 @@ export class RouteManager {
         arcType: ArcType.NONE, // Use custom arc positions instead of geodesic
         clampToGround: false, // Definitely above surface
         material: new PolylineGlowMaterialProperty({
-          glowPower: new ConstantProperty(0.8), // Very strong glow
-          taperPower: new ConstantProperty(0.3), // Minimal taper for consistent thickness
+          glowPower: new ConstantProperty(0.6), // Moderate glow for stability
+          taperPower: new ConstantProperty(0.5), // Balanced taper
           color: new ConstantProperty(Color.fromCssColorString('#DAA520').withAlpha(1.0)) // Deep golden rod, full opacity
         }),
-        // Render above surface
-        // Prevent depth testing issues that cause blinking
-        depthFailMaterial: new PolylineGlowMaterialProperty({
-          glowPower: new ConstantProperty(0.8),
-          taperPower: new ConstantProperty(0.3),
-          color: new ConstantProperty(Color.fromCssColorString('#DAA520').withAlpha(1.0))
-        }),
+        // Render above surface - no depth fail material to prevent blinking
         // Make always visible
         distanceDisplayCondition: undefined
       },
@@ -105,7 +99,7 @@ export class RouteManager {
   }
 
   /**
-   * Creates elevated arc positions between two cities
+   * Creates elevated arc positions between two cities with lower, more natural height
    */
   private createElevatedArcPositions(fromStop: Stop, toStop: Stop): Cartesian3[] {
     const startLon = fromStop.lng!
@@ -118,11 +112,11 @@ export class RouteManager {
       Math.pow(endLon - startLon, 2) + Math.pow(endLat - startLat, 2)
     )
     
-    // Arc height based on distance (higher for longer routes)
-    const maxHeight = Math.max(200000, distance * 50000) // Minimum 200km elevation
+    // Much lower arc height - closer to surface but still visible
+    const maxHeight = Math.max(50000, distance * 15000) // Minimum 50km elevation, much lower multiplier
     
     const positions: Cartesian3[] = []
-    const segments = 50 // More segments for smoother arc
+    const segments = 30 // Fewer segments for better performance
     
     for (let i = 0; i <= segments; i++) {
       const t = i / segments
@@ -142,33 +136,23 @@ export class RouteManager {
 
 
   /**
-   * Updates route visibility to prevent blinking and ensure stability
+   * Updates route visibility with completely stable behavior - no blinking
    */
   updateRouteVisibility(): void {
     const cameraHeight = this.viewer.camera.positionCartographic.height
     
-    // Always show routes when zoomed out enough - no blinking
-    const shouldShowRoute = cameraHeight > 300000 // Lower threshold for better visibility
+    // Simple, stable visibility logic - no complex calculations that cause blinking
+    const shouldShowRoute = cameraHeight > 200000 // Show when >200km altitude
     
     this.routeEntities.forEach(entity => {
       if (entity.polyline) {
-        // Stable visibility - no flickering
-        entity.show = shouldShowRoute
-        
-        if (shouldShowRoute) {
-          // Keep consistent deep golden color - no opacity changes that cause blinking
-          const material = entity.polyline.material as PolylineGlowMaterialProperty
-          const depthMaterial = entity.polyline.depthFailMaterial as PolylineGlowMaterialProperty
-          
-          const deepGolden = Color.fromCssColorString('#DAA520') // Deep golden rod
-          
-          if (material) {
-            material.color = new ConstantProperty(deepGolden.withAlpha(1.0))
-          }
-          if (depthMaterial) {
-            depthMaterial.color = new ConstantProperty(deepGolden.withAlpha(1.0))
-          }
+        // Only change visibility if it's actually different to prevent unnecessary updates
+        if (entity.show !== shouldShowRoute) {
+          entity.show = shouldShowRoute
         }
+        
+        // Never change material properties during zoom - this prevents blinking
+        // Materials are set once during creation and never modified
       }
     })
   }
@@ -252,10 +236,10 @@ export function addSimpleRoute(viewer: Viewer, stops: Stop[]): Entity[] {
     if (fromStop.lat != null && fromStop.lng != null && 
         toStop.lat != null && toStop.lng != null) {
       
-      // Create elevated arc for simple route too
+      // Create elevated arc for simple route too - much lower
       const elevatedPositions = [
-        Cartesian3.fromDegrees(fromStop.lng, fromStop.lat, 200000), // 200km elevation
-        Cartesian3.fromDegrees(toStop.lng, toStop.lat, 200000)
+        Cartesian3.fromDegrees(fromStop.lng, fromStop.lat, 50000), // 50km elevation - much lower
+        Cartesian3.fromDegrees(toStop.lng, toStop.lat, 50000)
       ]
 
       const routeEntity = viewer.entities.add({
@@ -266,11 +250,8 @@ export function addSimpleRoute(viewer: Viewer, stops: Stop[]): Entity[] {
           arcType: ArcType.NONE, // Use elevated positions
           clampToGround: false,
           material: new PolylineGlowMaterialProperty({
-            glowPower: new ConstantProperty(0.8),
-            color: new ConstantProperty(Color.fromCssColorString('#DAA520').withAlpha(1.0))
-          }),
-          depthFailMaterial: new PolylineGlowMaterialProperty({
-            glowPower: new ConstantProperty(0.8),
+            glowPower: new ConstantProperty(0.6),
+            taperPower: new ConstantProperty(0.5),
             color: new ConstantProperty(Color.fromCssColorString('#DAA520').withAlpha(1.0))
           })
         }

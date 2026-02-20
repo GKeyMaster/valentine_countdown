@@ -12,73 +12,50 @@ import {
 import type { Stop } from '../data/types'
 
 /**
- * Creates an ultra-clear, high-contrast marker icon for venue locations
+ * Creates a round PNG marker using SVG data URL
  */
-export function createMarkerCanvas(isSelected = false): HTMLCanvasElement {
+export function createMarkerImage(isSelected = false): string {
+  const size = isSelected ? 32 : 24
+  const radius = isSelected ? 14 : 10
+  const strokeWidth = isSelected ? 3 : 2
+  
+  // Colors for selected vs unselected state
+  const fillColor = isSelected ? '#FFD700' : '#FFA500' // Gold vs Orange
+  const strokeColor = isSelected ? '#B8860B' : '#FF8C00' // Dark golden rod vs Dark orange
+  const centerColor = isSelected ? '#8B4513' : '#654321' // Dark brown center
+  
+  const svg = `
+    <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+          <feMerge> 
+            <feMergeNode in="coloredBlur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+      <circle cx="${size/2}" cy="${size/2}" r="${radius}" 
+              fill="${fillColor}" 
+              stroke="${strokeColor}" 
+              stroke-width="${strokeWidth}"
+              filter="url(#glow)"/>
+      <circle cx="${size/2}" cy="${size/2}" r="${radius/3}" 
+              fill="${centerColor}"/>
+    </svg>
+  `
+  
+  return `data:image/svg+xml;base64,${btoa(svg)}`
+}
+
+/**
+ * Legacy function for backward compatibility
+ */
+export function createMarkerCanvas(): HTMLCanvasElement {
+  // Create a simple canvas that will be replaced by the image
   const canvas = document.createElement('canvas')
-  const size = isSelected ? 64 : 56 // Even higher resolution for maximum clarity
-  canvas.width = size
-  canvas.height = size
-  
-  const ctx = canvas.getContext('2d')!
-  const center = size / 2
-  const radius = isSelected ? 26 : 22
-  
-  // Enable maximum quality rendering
-  ctx.imageSmoothingEnabled = true
-  ctx.imageSmoothingQuality = 'high'
-  
-  // Create strong outer glow for maximum visibility
-  ctx.shadowColor = isSelected ? '#D4AF37' : '#FFD700' // Deep gold glow
-  ctx.shadowBlur = isSelected ? 16 : 12
-  ctx.shadowOffsetX = 0
-  ctx.shadowOffsetY = 0
-  
-  // Outer ring for high contrast
-  ctx.beginPath()
-  ctx.arc(center, center, radius + 2, 0, 2 * Math.PI)
-  ctx.fillStyle = isSelected ? '#8B4513' : '#2F1B14' // Dark brown border
-  ctx.fill()
-  
-  // Reset shadow for main circle
-  ctx.shadowBlur = 0
-  
-  // Main circle with high-contrast gradient
-  const gradient = ctx.createRadialGradient(center, center, 0, center, center, radius)
-  if (isSelected) {
-    gradient.addColorStop(0, '#FFD700') // Bright gold center
-    gradient.addColorStop(0.5, '#DAA520') // Golden rod
-    gradient.addColorStop(1, '#B8860B') // Dark golden rod edge
-  } else {
-    gradient.addColorStop(0, '#FFF8DC') // Cornsilk center
-    gradient.addColorStop(0.5, '#F0E68C') // Khaki
-    gradient.addColorStop(1, '#DAA520') // Golden rod edge
-  }
-  
-  ctx.beginPath()
-  ctx.arc(center, center, radius, 0, 2 * Math.PI)
-  ctx.fillStyle = gradient
-  ctx.fill()
-  
-  // High-contrast inner ring
-  ctx.beginPath()
-  ctx.arc(center, center, radius - 4, 0, 2 * Math.PI)
-  ctx.strokeStyle = isSelected ? '#8B4513' : '#654321' // Dark brown
-  ctx.lineWidth = 2
-  ctx.stroke()
-  
-  // Center dot with maximum contrast
-  ctx.beginPath()
-  ctx.arc(center, center, 6, 0, 2 * Math.PI)
-  ctx.fillStyle = isSelected ? '#2F1B14' : '#1A1A1A' // Very dark center
-  ctx.fill()
-  
-  // Bright highlight for visibility
-  ctx.beginPath()
-  ctx.arc(center - 2, center - 2, 2, 0, 2 * Math.PI)
-  ctx.fillStyle = isSelected ? '#FFFF99' : '#FFFACD' // Bright highlight
-  ctx.fill()
-  
+  canvas.width = 1
+  canvas.height = 1
   return canvas
 }
 
@@ -87,20 +64,21 @@ export function createMarkerCanvas(isSelected = false): HTMLCanvasElement {
  */
 export function createVenueMarker(stop: Stop, isSelected = false): Entity {
   const position = Cartesian3.fromDegrees(stop.lng ?? 0, stop.lat ?? 0)
-  const canvas = createMarkerCanvas(isSelected)
+  const imageUrl = createMarkerImage(isSelected)
+  const size = isSelected ? 32 : 24
   
   return new Entity({
     id: stop.id,
     position: position,
     billboard: {
-      image: new ConstantProperty(canvas),
-      width: canvas.width,
-      height: canvas.height,
-      verticalOrigin: VerticalOrigin.BOTTOM,
+      image: new ConstantProperty(imageUrl),
+      width: size,
+      height: size,
+      verticalOrigin: VerticalOrigin.CENTER,
       horizontalOrigin: HorizontalOrigin.CENTER,
       disableDepthTestDistance: Number.POSITIVE_INFINITY, // Always visible
       scale: 1.0,
-      pixelOffset: new Cartesian3(0, -5, 0) // Slight offset for better positioning
+      pixelOffset: new Cartesian3(0, 0, 0)
     },
     // Store stop data for easy access
     properties: {
@@ -226,7 +204,10 @@ export class VenueMarkerManager {
       if (existingMarker) {
         // Update existing marker if selection state changed
         if (existingMarker.billboard) {
-          existingMarker.billboard.image = new ConstantProperty(createMarkerCanvas(isSelected))
+          existingMarker.billboard.image = new ConstantProperty(createMarkerImage(isSelected))
+          const size = isSelected ? 32 : 24
+          existingMarker.billboard.width = new ConstantProperty(size)
+          existingMarker.billboard.height = new ConstantProperty(size)
         }
       } else {
         // Create new marker
@@ -244,7 +225,10 @@ export class VenueMarkerManager {
     for (const [stopId, entity] of this.markers) {
       const isSelected = stopId === selectedStopId
       if (entity.billboard) {
-        entity.billboard.image = new ConstantProperty(createMarkerCanvas(isSelected))
+        entity.billboard.image = new ConstantProperty(createMarkerImage(isSelected))
+        const size = isSelected ? 32 : 24
+        entity.billboard.width = new ConstantProperty(size)
+        entity.billboard.height = new ConstantProperty(size)
       }
     }
   }

@@ -84,18 +84,8 @@ export function Globe({
           markerManagerRef.current.setOnMarkerClick(onSelectStop)
         }
 
-        // Set up less frequent camera change listener to prevent blinking
-        if (routeManagerRef.current) {
-          let lastUpdate = 0
-          result.viewer.camera.changed.addEventListener(() => {
-            const now = Date.now()
-            // Only update visibility every 500ms to prevent blinking
-            if (now - lastUpdate > 500) {
-              routeManagerRef.current?.updateRouteVisibility()
-              lastUpdate = now
-            }
-          })
-        }
+        // No camera change listener - routes are always visible to prevent blinking
+        // Routes will be managed only when stops change, not during camera movement
         
         // Set initial camera position if we have stops
         if (stops.length > 0) {

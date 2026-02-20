@@ -12,36 +12,64 @@ import {
 import type { Stop } from '../data/types'
 
 /**
- * Creates a round PNG marker using SVG data URL
+ * Creates a perfectly round marker with distinct selected/unselected states
  */
 export function createMarkerImage(isSelected = false): string {
-  const size = isSelected ? 32 : 24
-  const radius = isSelected ? 14 : 10
-  const strokeWidth = isSelected ? 3 : 2
+  const size = 40 // Fixed size for consistency
+  const radius = isSelected ? 18 : 15 // Different sizes for states
   
-  // Colors for selected vs unselected state
-  const fillColor = isSelected ? '#FFD700' : '#FFA500' // Gold vs Orange
-  const strokeColor = isSelected ? '#B8860B' : '#FF8C00' // Dark golden rod vs Dark orange
-  const centerColor = isSelected ? '#8B4513' : '#654321' // Dark brown center
+  // Distinct colors for each state
+  const colors = isSelected ? {
+    outer: '#FFD700',      // Bright gold
+    middle: '#FFA500',     // Orange
+    inner: '#FF6347',      // Tomato red
+    stroke: '#8B0000',     // Dark red
+    glow: '#FFD700'        // Gold glow
+  } : {
+    outer: '#87CEEB',      // Sky blue
+    middle: '#4682B4',     // Steel blue
+    inner: '#191970',      // Midnight blue
+    stroke: '#000080',     // Navy
+    glow: '#87CEEB'        // Blue glow
+  }
   
   const svg = `
     <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <filter id="glow">
-          <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-          <feMerge> 
+        <radialGradient id="grad${isSelected ? 'Sel' : 'Unsel'}" cx="50%" cy="30%" r="70%">
+          <stop offset="0%" style="stop-color:${colors.outer};stop-opacity:1" />
+          <stop offset="70%" style="stop-color:${colors.middle};stop-opacity:1" />
+          <stop offset="100%" style="stop-color:${colors.inner};stop-opacity:1" />
+        </radialGradient>
+        <filter id="glow${isSelected ? 'Sel' : 'Unsel'}" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+          <feMerge>
             <feMergeNode in="coloredBlur"/>
             <feMergeNode in="SourceGraphic"/>
           </feMerge>
         </filter>
       </defs>
+      
+      <!-- Outer glow circle -->
+      <circle cx="${size/2}" cy="${size/2}" r="${radius + 4}" 
+              fill="${colors.glow}" 
+              opacity="0.3"/>
+      
+      <!-- Main circle with gradient -->
       <circle cx="${size/2}" cy="${size/2}" r="${radius}" 
-              fill="${fillColor}" 
-              stroke="${strokeColor}" 
-              stroke-width="${strokeWidth}"
-              filter="url(#glow)"/>
-      <circle cx="${size/2}" cy="${size/2}" r="${radius/3}" 
-              fill="${centerColor}"/>
+              fill="url(#grad${isSelected ? 'Sel' : 'Unsel'})" 
+              stroke="${colors.stroke}" 
+              stroke-width="2"
+              filter="url(#glow${isSelected ? 'Sel' : 'Unsel'})"/>
+      
+      <!-- Inner highlight -->
+      <circle cx="${size/2 - 3}" cy="${size/2 - 3}" r="3" 
+              fill="white" 
+              opacity="0.8"/>
+      
+      <!-- Center dot -->
+      <circle cx="${size/2}" cy="${size/2}" r="4" 
+              fill="${colors.stroke}"/>
     </svg>
   `
   
@@ -65,7 +93,7 @@ export function createMarkerCanvas(): HTMLCanvasElement {
 export function createVenueMarker(stop: Stop, isSelected = false): Entity {
   const position = Cartesian3.fromDegrees(stop.lng ?? 0, stop.lat ?? 0)
   const imageUrl = createMarkerImage(isSelected)
-  const size = isSelected ? 32 : 24
+  const size = 40 // Consistent size, visual difference is in the marker design
   
   return new Entity({
     id: stop.id,
@@ -205,9 +233,7 @@ export class VenueMarkerManager {
         // Update existing marker if selection state changed
         if (existingMarker.billboard) {
           existingMarker.billboard.image = new ConstantProperty(createMarkerImage(isSelected))
-          const size = isSelected ? 32 : 24
-          existingMarker.billboard.width = new ConstantProperty(size)
-          existingMarker.billboard.height = new ConstantProperty(size)
+          // Size stays consistent, only image changes
         }
       } else {
         // Create new marker
@@ -226,9 +252,7 @@ export class VenueMarkerManager {
       const isSelected = stopId === selectedStopId
       if (entity.billboard) {
         entity.billboard.image = new ConstantProperty(createMarkerImage(isSelected))
-        const size = isSelected ? 32 : 24
-        entity.billboard.width = new ConstantProperty(size)
-        entity.billboard.height = new ConstantProperty(size)
+        // Size stays consistent, only image changes
       }
     }
   }

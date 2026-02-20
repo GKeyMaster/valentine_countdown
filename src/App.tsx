@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import type { Viewer } from 'cesium'
 import { Globe } from './components/Globe'
 import { HeaderBar } from './components/HeaderBar'
@@ -47,10 +47,10 @@ function App() {
 
   const selectedStop = stops.find(stop => stop.id === selectedStopId) || null
 
-  const handleGlobeReady = (cesiumViewer: Viewer) => {
+  const handleGlobeReady = useCallback((cesiumViewer: Viewer) => {
     setViewer(cesiumViewer)
     console.log('🌍 Globe ready for interactions')
-  }
+  }, [])
 
   if (loading) {
     return (

@@ -5,37 +5,8 @@ import {
   WebMercatorTilingScheme,
   Rectangle,
   Credit,
-  JulianDate,
-  Ion,
-  Color
+  JulianDate
 } from 'cesium'
-
-// Configure Cesium - completely disable Ion services
-Ion.defaultAccessToken = undefined as any
-
-// Disable Ion asset and terrain providers to prevent API calls
-Ion.defaultServer = undefined as any
-
-// Prevent any Ion API calls by setting empty endpoints
-if (typeof Ion !== 'undefined') {
-  try {
-    // Override Ion endpoints to prevent API calls
-    ;(Ion as any).defaultServer = {
-      url: '',
-      accessToken: undefined
-    }
-    
-    // Disable Ion imagery providers completely
-    ;(Ion as any).createWorldImagery = undefined
-    ;(Ion as any).createWorldTerrain = undefined
-  } catch (e) {
-    // Ignore errors in Ion configuration override
-  }
-}
-
-if (typeof window !== 'undefined') {
-  ;(window as any).CESIUM_BASE_URL = '/cesium/'
-}
 import { DAY_TEMPLATES, NIGHT_TEMPLATES } from '../imagery/gibsTemplates'
 import { resolveImageryTemplates } from '../imagery/resolveGibsTemplate'
 
@@ -44,115 +15,39 @@ export interface ViewerCreationResult {
   isReady: Promise<void>
 }
 
-// Cache resolved templates to avoid re-resolving on every viewer creation
-let cachedTemplates: { dayTemplate: any; nightTemplate: any } | null = null
+let viewerCreationCount = 0
 
 export async function createViewer(container: HTMLElement, creditContainer?: HTMLElement): Promise<ViewerCreationResult> {
+  viewerCreationCount++
+  console.log(`[Cesium] createViewer called (count: ${viewerCreationCount})`)
+  
   // Create terrain provider (no Ion required)
   const terrainProvider = new EllipsoidTerrainProvider()
 
-
   // Create viewer with minimal configuration and custom credit container
-  let viewer: Viewer
-  
-  // Suppress iframe-related and Ion-related errors that don't affect core functionality
-  const originalConsoleError = console.error
-  console.error = (...args) => {
-    const message = args.join(' ')
-    if (message.includes('sandboxed') || 
-        message.includes('about:blank') ||
-        message.includes('getDerivedResource') ||
-        message.includes('fromWorldImagery') ||
-        message.includes('Ion') ||
-        message.includes('_createEndpointResource')) {
-      // Suppress errors that don't affect core functionality
-      return
-    }
-    originalConsoleError.apply(console, args)
-  }
-  
-  try {
-    viewer = new Viewer(container, {
-      // Terrain - explicitly use ellipsoid (no Ion)
-      terrainProvider,
-      
-      // Use dummy base layer to prevent Ion calls
-      baseLayer: false,
-      
-      // Disable UI clutter
-      animation: false,
-      timeline: false,
-      geocoder: false,
-      homeButton: false,
-      sceneModePicker: false,
-      baseLayerPicker: false,
-      navigationHelpButton: false,
-      fullscreenButton: false,
-      
-      // Disable Ion-related features and prevent Ion API calls
-      requestRenderMode: false,
-      maximumRenderTimeChange: Infinity,
-      
-      // Custom credit container for unobtrusive credits
-      creditContainer: creditContainer
-    })
+  const viewer = new Viewer(container, {
+    // Terrain
+    terrainProvider,
     
-    console.log('✅ Cesium Viewer instance created')
+    // Disable UI clutter
+    animation: false,
+    timeline: false,
+    geocoder: false,
+    homeButton: false,
+    sceneModePicker: false,
+    baseLayerPicker: false,
+    navigationHelpButton: false,
+    fullscreenButton: false,
     
-    // Verify viewer is properly initialized
-    if (!viewer || !viewer.scene) {
-      throw new Error('Viewer was created but scene is not available')
-    }
-    
-    console.log('✅ Viewer scene is available')
-  } catch (error) {
-    // If viewer creation fails due to Ion issues, try a more basic approach
-    console.warn('Initial viewer creation failed, trying fallback approach:', error)
-    
-    try {
-      // Fallback: create with absolute minimal configuration
-      viewer = new Viewer(container, {
-        terrainProvider,
-        baseLayer: false,
-        animation: false,
-        timeline: false,
-        geocoder: false,
-        homeButton: false,
-        sceneModePicker: false,
-        baseLayerPicker: false,
-        navigationHelpButton: false,
-        fullscreenButton: false,
-        creditContainer: creditContainer
-      })
-      
-      console.log('✅ Cesium Viewer created with fallback approach')
-    } catch (fallbackError) {
-      console.error('❌ Failed to create Cesium Viewer even with fallback:', fallbackError)
-      throw fallbackError
-    }
-  }
+    // Custom credit container for unobtrusive credits
+    creditContainer: creditContainer
+  })
 
   // GUARANTEE no Ion imagery remains
   viewer.imageryLayers.removeAll(true)
-  
-  // Configure globe to prevent any Ion requests
-  viewer.scene.globe.baseColor = Color.fromBytes(51, 51, 76, 255) // Dark blue base color
 
-  // Resolve best available imagery templates (with caching)
-  if (!cachedTemplates) {
-    try {
-      cachedTemplates = await resolveImageryTemplates(DAY_TEMPLATES, NIGHT_TEMPLATES)
-    } catch (error) {
-      console.warn('Failed to resolve imagery templates, using fallback:', error)
-      // Use fallback templates
-      cachedTemplates = {
-        dayTemplate: DAY_TEMPLATES[DAY_TEMPLATES.length - 1],
-        nightTemplate: NIGHT_TEMPLATES[NIGHT_TEMPLATES.length - 1]
-      }
-    }
-  }
-  
-  const { dayTemplate, nightTemplate } = cachedTemplates
+  // Resolve best available imagery templates
+  const { dayTemplate, nightTemplate } = await resolveImageryTemplates(DAY_TEMPLATES, NIGHT_TEMPLATES)
 
   // Create day imagery provider with resolved template
   const dayImageryProvider = new UrlTemplateImageryProvider({
@@ -208,15 +103,13 @@ export async function createViewer(container: HTMLElement, creditContainer?: HTM
   ;(viewer as any).dayImageryProvider = dayImageryProvider
   ;(viewer as any).nightImageryProvider = nightImageryProvider
 
-  // Create readiness promise - simplified approach
+  // Create readiness promise that resolves when both layers are ready
   const isReady = new Promise<void>((resolve) => {
-    // Simple timeout-based approach that works reliably
-    // The viewer is created synchronously, imagery loading happens in background
+    // Simple timeout-based approach for now
+    // In production, you might want to listen to actual tile loading events
     setTimeout(() => {
-      console.log('✅ Cesium viewer initialization complete')
-      console.log('🌍 Proceeding with globe display')
       resolve()
-    }, 1000) // Give imagery a moment to start loading
+    }, 1000) // Give imagery providers time to initialize
   })
 
   // DEV-ONLY: Verification logging and debug helpers
@@ -224,13 +117,6 @@ export async function createViewer(container: HTMLElement, creditContainer?: HTM
     console.log('🌍 Cesium Viewer Initialized - Premium Tokenless Configuration')
     console.log(`🌅 Day template: ${dayTemplate.name} (Level ${dayTemplate.maxLevel})`)
     console.log(`🌃 Night template: ${nightTemplate.name} (Level ${nightTemplate.maxLevel})`)
-    
-    // Verify viewer is functional despite any iframe warnings
-    if (viewer.scene && viewer.scene.globe && viewer.imageryLayers.length > 0) {
-      console.log('✅ Viewer is fully functional')
-    } else {
-      console.warn('⚠️ Viewer may have initialization issues')
-    }
     
     // Check for unwanted providers
     const layers = viewer.imageryLayers

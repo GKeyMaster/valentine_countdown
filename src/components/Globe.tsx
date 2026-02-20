@@ -10,66 +10,45 @@ export function Globe({ onReady }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const creditContainerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Viewer | null>(null)
-  const onReadyRef = useRef(onReady)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isInitialized, setIsInitialized] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const initOnceRef = useRef(false)
+  const [isReady, setIsReady] = useState(false)
 
-  // Update the onReady ref when it changes, but don't recreate the viewer
-  useEffect(() => {
-    onReadyRef.current = onReady
+  // Stable callback to avoid recreating the onReady function
+  const onReadyCallback = useCallback((viewer: Viewer) => {
+    console.log('[Cesium] Globe ready for interactions')
+    onReady?.(viewer)
   }, [onReady])
 
-  // Initialize viewer only once
+  // Initialize Cesium viewer ONCE
   useEffect(() => {
-    if (!containerRef.current || isInitialized) return
-
-    let mounted = true
-    setIsInitialized(true)
+    if (!containerRef.current) return
+    if (initOnceRef.current) return
+    
+    initOnceRef.current = true
+    console.log('[Cesium] init viewer')
 
     const initializeViewer = async () => {
       try {
-        console.log('🚀 Initializing Cesium viewer...')
-        
         // Create Cesium viewer with credit container
         const result = await createViewer(
           containerRef.current!, 
           creditContainerRef.current || undefined
         )
-        
-        if (!mounted) {
-          result.viewer.destroy()
-          return
-        }
 
         viewerRef.current = result.viewer
         
         // Wait for imagery to be ready
         await result.isReady
         
-        if (!mounted) return
-
         // Fade in the globe
         if (containerRef.current) {
-          containerRef.current.style.transition = 'opacity 300ms ease-out'
-          
-          // Small delay to ensure everything is rendered, then fade in
-          setTimeout(() => {
-            if (containerRef.current && mounted) {
-              containerRef.current.style.opacity = '1'
-              setIsLoading(false)
-              onReadyRef.current?.(result.viewer)
-              console.log('🎉 Globe ready and visible')
-            }
-          }, 100)
+          containerRef.current.style.opacity = '1'
+          setIsReady(true)
+          onReadyCallback(result.viewer)
         }
-      } catch (err) {
-        console.error('❌ Failed to initialize Cesium viewer:', err)
-        if (mounted) {
-          setError(err instanceof Error ? err.message : 'Failed to initialize viewer')
-          setIsLoading(false)
-          setIsInitialized(false) // Allow retry
-        }
+      } catch (error) {
+        console.error('Failed to initialize Cesium viewer:', error)
+        setIsReady(true) // Show something even if failed
       }
     }
 
@@ -77,99 +56,66 @@ export function Globe({ onReady }: GlobeProps) {
 
     // Cleanup on unmount
     return () => {
-      mounted = false
+      console.log('[Cesium] destroy viewer')
       if (viewerRef.current) {
-        console.log('🧹 Cleaning up Cesium viewer')
         viewerRef.current.destroy()
         viewerRef.current = null
       }
+      initOnceRef.current = false
     }
-  }, [isInitialized])
+  }, []) // Empty dependency array - init ONCE only
 
-  const handleRetry = useCallback(() => {
-    setError(null)
-    setIsLoading(true)
-    setIsInitialized(false)
-  }, [])
+  // Separate effect to handle onReady callback changes
+  useEffect(() => {
+    if (isReady && viewerRef.current) {
+      console.log('[Cesium] Calling onReady callback (viewer already exists)')
+      onReadyCallback(viewerRef.current)
+    }
+  }, [onReadyCallback, isReady])
 
   return (
     <>
-      {/* Loading Overlay */}
-      {isLoading && !error && (
-        <div className="loading-overlay">
-          <div className="glass-panel" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
-            <div 
-              style={{ 
-                fontSize: 'var(--font-size-lg)', 
-                color: 'var(--text)', 
-                marginBottom: 'var(--space-2)' 
-              }}
-            >
-              Loading experience...
-            </div>
-            <div 
-              style={{ 
-                fontSize: 'var(--font-size-sm)', 
-                color: 'var(--text-muted)' 
-              }}
-            >
-              Preparing high-resolution imagery
-            </div>
+      {/* Loading Overlay - CSS overlay, not conditional rendering */}
+      <div 
+        className="loading-overlay"
+        style={{ 
+          opacity: isReady ? 0 : 1,
+          pointerEvents: isReady ? 'none' : 'auto'
+        }}
+      >
+        <div className="glass-panel" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
+          <div 
+            style={{ 
+              fontSize: 'var(--font-size-lg)', 
+              color: 'var(--text)', 
+              marginBottom: 'var(--space-2)' 
+            }}
+          >
+            Loading experience...
+          </div>
+          <div 
+            style={{ 
+              fontSize: 'var(--font-size-sm)', 
+              color: 'var(--text-muted)' 
+            }}
+          >
+            Preparing high-resolution imagery
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Error Overlay */}
-      {error && (
-        <div className="loading-overlay">
-          <div className="glass-panel" style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
-            <div 
-              style={{ 
-                fontSize: 'var(--font-size-lg)', 
-                color: 'var(--text)', 
-                marginBottom: 'var(--space-2)' 
-              }}
-            >
-              ⚠️ Globe Loading Error
-            </div>
-            <div 
-              style={{ 
-                fontSize: 'var(--font-size-sm)', 
-                color: 'var(--text-muted)',
-                marginBottom: 'var(--space-4)'
-              }}
-            >
-              {error}
-            </div>
-            <button
-              onClick={handleRetry}
-              className="glass-panel-subtle interactive"
-              style={{
-                padding: 'var(--space-2) var(--space-4)',
-                fontSize: 'var(--font-size-sm)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--panel)',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer'
-              }}
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Cesium Container */}
+      {/* Cesium Container - ALWAYS rendered, never conditional */}
       <div 
         ref={containerRef}
+        className="cesiumRoot"
         style={{
           width: '100%',
           height: '100%',
           position: 'absolute',
           top: 0,
           left: 0,
-          opacity: 0 // Start invisible, fade in when ready
+          opacity: 0, // Start invisible, fade in when ready
+          transition: 'opacity 300ms ease-out'
         }}
       />
 

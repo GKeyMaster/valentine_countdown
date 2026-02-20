@@ -12,76 +12,71 @@ import {
 import type { Stop } from '../data/types'
 
 /**
- * Creates a high-resolution, premium marker icon for venue locations
+ * Creates an ultra-clear, high-contrast marker icon for venue locations
  */
 export function createMarkerCanvas(isSelected = false): HTMLCanvasElement {
   const canvas = document.createElement('canvas')
-  const size = isSelected ? 48 : 40 // Much higher resolution
+  const size = isSelected ? 64 : 56 // Even higher resolution for maximum clarity
   canvas.width = size
   canvas.height = size
   
   const ctx = canvas.getContext('2d')!
   const center = size / 2
-  const radius = isSelected ? 20 : 16
+  const radius = isSelected ? 26 : 22
   
-  // Enable high-quality rendering
+  // Enable maximum quality rendering
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
   
-  // Create gradient for premium look
-  const gradient = ctx.createRadialGradient(center, center, 0, center, center, radius)
-  if (isSelected) {
-    gradient.addColorStop(0, '#F4E6C7') // Light champagne center
-    gradient.addColorStop(0.7, '#E7D1A7') // Main champagne
-    gradient.addColorStop(1, '#D4BE87') // Darker champagne edge
-  } else {
-    gradient.addColorStop(0, 'rgba(255, 255, 255, 1.0)')
-    gradient.addColorStop(0.7, 'rgba(255, 255, 255, 0.9)')
-    gradient.addColorStop(1, 'rgba(255, 255, 255, 0.7)')
-  }
-  
-  // Outer glow/shadow
-  ctx.shadowColor = isSelected ? '#E7D1A7' : 'rgba(255, 255, 255, 0.8)'
-  ctx.shadowBlur = isSelected ? 8 : 6
+  // Create strong outer glow for maximum visibility
+  ctx.shadowColor = isSelected ? '#D4AF37' : '#FFD700' // Deep gold glow
+  ctx.shadowBlur = isSelected ? 16 : 12
   ctx.shadowOffsetX = 0
   ctx.shadowOffsetY = 0
   
-  // Main circle with gradient
+  // Outer ring for high contrast
+  ctx.beginPath()
+  ctx.arc(center, center, radius + 2, 0, 2 * Math.PI)
+  ctx.fillStyle = isSelected ? '#8B4513' : '#2F1B14' // Dark brown border
+  ctx.fill()
+  
+  // Reset shadow for main circle
+  ctx.shadowBlur = 0
+  
+  // Main circle with high-contrast gradient
+  const gradient = ctx.createRadialGradient(center, center, 0, center, center, radius)
+  if (isSelected) {
+    gradient.addColorStop(0, '#FFD700') // Bright gold center
+    gradient.addColorStop(0.5, '#DAA520') // Golden rod
+    gradient.addColorStop(1, '#B8860B') // Dark golden rod edge
+  } else {
+    gradient.addColorStop(0, '#FFF8DC') // Cornsilk center
+    gradient.addColorStop(0.5, '#F0E68C') // Khaki
+    gradient.addColorStop(1, '#DAA520') // Golden rod edge
+  }
+  
   ctx.beginPath()
   ctx.arc(center, center, radius, 0, 2 * Math.PI)
   ctx.fillStyle = gradient
   ctx.fill()
   
-  // Reset shadow for inner elements
-  ctx.shadowColor = 'transparent'
-  ctx.shadowBlur = 0
-  
-  // Inner ring for depth
+  // High-contrast inner ring
   ctx.beginPath()
-  ctx.arc(center, center, radius - 3, 0, 2 * Math.PI)
-  ctx.strokeStyle = isSelected ? 'rgba(26, 31, 46, 0.3)' : 'rgba(12, 16, 24, 0.4)'
-  ctx.lineWidth = 1
+  ctx.arc(center, center, radius - 4, 0, 2 * Math.PI)
+  ctx.strokeStyle = isSelected ? '#8B4513' : '#654321' // Dark brown
+  ctx.lineWidth = 2
   ctx.stroke()
   
-  // Center dot with subtle gradient
-  const centerGradient = ctx.createRadialGradient(center, center, 0, center, center, 4)
-  if (isSelected) {
-    centerGradient.addColorStop(0, '#1A1F2E')
-    centerGradient.addColorStop(1, 'rgba(26, 31, 46, 0.8)')
-  } else {
-    centerGradient.addColorStop(0, 'rgba(12, 16, 24, 0.9)')
-    centerGradient.addColorStop(1, 'rgba(12, 16, 24, 0.6)')
-  }
-  
+  // Center dot with maximum contrast
   ctx.beginPath()
-  ctx.arc(center, center, 4, 0, 2 * Math.PI)
-  ctx.fillStyle = centerGradient
+  ctx.arc(center, center, 6, 0, 2 * Math.PI)
+  ctx.fillStyle = isSelected ? '#2F1B14' : '#1A1A1A' // Very dark center
   ctx.fill()
   
-  // Highlight dot for premium feel
+  // Bright highlight for visibility
   ctx.beginPath()
-  ctx.arc(center - 1, center - 1, 1.5, 0, 2 * Math.PI)
-  ctx.fillStyle = isSelected ? 'rgba(244, 230, 199, 0.8)' : 'rgba(255, 255, 255, 0.6)'
+  ctx.arc(center - 2, center - 2, 2, 0, 2 * Math.PI)
+  ctx.fillStyle = isSelected ? '#FFFF99' : '#FFFACD' // Bright highlight
   ctx.fill()
   
   return canvas

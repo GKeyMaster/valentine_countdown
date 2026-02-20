@@ -63,30 +63,33 @@ export class RouteManager {
   }
 
   /**
-   * Creates a single route segment between two stops
+   * Creates a single route segment between two stops with elevated arc
    */
   private createRouteSegment(fromStop: Stop, toStop: Stop, segmentIndex: number): Entity {
-    const positions = [
-      Cartesian3.fromDegrees(fromStop.lng!, fromStop.lat!),
-      Cartesian3.fromDegrees(toStop.lng!, toStop.lat!)
-    ]
+    // Calculate arc positions with elevation for visibility above surface
+    const positions = this.createElevatedArcPositions(fromStop, toStop)
 
-    // Create elegant polyline with subtle glow
+    // Create ultra-visible polyline with deep golden color
     const routeEntity = new Entity({
       id: `route-segment-${segmentIndex}`,
       polyline: {
         positions: positions,
-        width: 6, // Much more visible width
-        arcType: ArcType.GEODESIC, // Natural arc following Earth's curvature
-        clampToGround: false, // Allow line to arc above surface
+        width: 8, // Even wider for maximum visibility
+        arcType: ArcType.NONE, // Use custom arc positions instead of geodesic
+        clampToGround: false, // Definitely above surface
         material: new PolylineGlowMaterialProperty({
-          glowPower: new ConstantProperty(0.4), // Much stronger glow for visibility
-          taperPower: new ConstantProperty(0.6), // Less taper for consistent visibility
-          color: new ConstantProperty(Color.fromCssColorString('#E7D1A7').withAlpha(0.95)) // Higher opacity
+          glowPower: new ConstantProperty(0.8), // Very strong glow
+          taperPower: new ConstantProperty(0.3), // Minimal taper for consistent thickness
+          color: new ConstantProperty(Color.fromCssColorString('#DAA520').withAlpha(1.0)) // Deep golden rod, full opacity
         }),
-        // Ensure route renders beneath markers
-        zIndex: -1,
-        // Make visible at all zoom levels
+        // Render above surface
+        // Prevent depth testing issues that cause blinking
+        depthFailMaterial: new PolylineGlowMaterialProperty({
+          glowPower: new ConstantProperty(0.8),
+          taperPower: new ConstantProperty(0.3),
+          color: new ConstantProperty(Color.fromCssColorString('#DAA520').withAlpha(1.0))
+        }),
+        // Make always visible
         distanceDisplayCondition: undefined
       },
       // Store route metadata
@@ -101,32 +104,70 @@ export class RouteManager {
     return routeEntity
   }
 
+  /**
+   * Creates elevated arc positions between two cities
+   */
+  private createElevatedArcPositions(fromStop: Stop, toStop: Stop): Cartesian3[] {
+    const startLon = fromStop.lng!
+    const startLat = fromStop.lat!
+    const endLon = toStop.lng!
+    const endLat = toStop.lat!
+    
+    // Calculate distance to determine arc height
+    const distance = Math.sqrt(
+      Math.pow(endLon - startLon, 2) + Math.pow(endLat - startLat, 2)
+    )
+    
+    // Arc height based on distance (higher for longer routes)
+    const maxHeight = Math.max(200000, distance * 50000) // Minimum 200km elevation
+    
+    const positions: Cartesian3[] = []
+    const segments = 50 // More segments for smoother arc
+    
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments
+      
+      // Linear interpolation for lat/lon
+      const lon = startLon + (endLon - startLon) * t
+      const lat = startLat + (endLat - startLat) * t
+      
+      // Parabolic arc for height (highest at middle)
+      const height = maxHeight * Math.sin(Math.PI * t)
+      
+      positions.push(Cartesian3.fromDegrees(lon, lat, height))
+    }
+    
+    return positions
+  }
+
 
   /**
-   * Updates route visibility based on camera distance for elegant presentation
+   * Updates route visibility to prevent blinking and ensure stability
    */
   updateRouteVisibility(): void {
     const cameraHeight = this.viewer.camera.positionCartographic.height
     
-    // Show route at more zoom levels for better visibility
-    // Only hide when very close to individual venues
-    const shouldShowRoute = cameraHeight > 500000 // Show when >500km altitude (lower threshold)
+    // Always show routes when zoomed out enough - no blinking
+    const shouldShowRoute = cameraHeight > 300000 // Lower threshold for better visibility
     
     this.routeEntities.forEach(entity => {
       if (entity.polyline) {
+        // Stable visibility - no flickering
         entity.show = shouldShowRoute
         
-        // Adjust opacity based on zoom level for smooth transition
-        const material = entity.polyline.material as PolylineGlowMaterialProperty
-        if (material && shouldShowRoute) {
-          // More visible opacity calculation
-          const minOpacity = 0.7 // Higher minimum opacity
-          const maxOpacity = 0.95 // Higher maximum opacity
-          const fadeRange = 1500000 // Longer fade range
-          const opacity = Math.min(maxOpacity, minOpacity + (cameraHeight - 500000) / fadeRange)
+        if (shouldShowRoute) {
+          // Keep consistent deep golden color - no opacity changes that cause blinking
+          const material = entity.polyline.material as PolylineGlowMaterialProperty
+          const depthMaterial = entity.polyline.depthFailMaterial as PolylineGlowMaterialProperty
           
-          const baseColor = Color.fromCssColorString('#E7D1A7')
-          material.color = new ConstantProperty(baseColor.withAlpha(Math.max(minOpacity, opacity)))
+          const deepGolden = Color.fromCssColorString('#DAA520') // Deep golden rod
+          
+          if (material) {
+            material.color = new ConstantProperty(deepGolden.withAlpha(1.0))
+          }
+          if (depthMaterial) {
+            depthMaterial.color = new ConstantProperty(deepGolden.withAlpha(1.0))
+          }
         }
       }
     })
@@ -141,11 +182,11 @@ export class RouteManager {
       const material = entity.polyline.material as PolylineGlowMaterialProperty
       if (material) {
         if (highlight) {
-          material.glowPower = new ConstantProperty(0.6) // Much stronger glow when highlighted
-          material.color = new ConstantProperty(Color.fromCssColorString('#F4E6C7').withAlpha(1.0)) // Brighter champagne, full opacity
+          material.glowPower = new ConstantProperty(1.0) // Maximum glow when highlighted
+          material.color = new ConstantProperty(Color.fromCssColorString('#FFD700').withAlpha(1.0)) // Bright gold when highlighted
         } else {
-          material.glowPower = new ConstantProperty(0.4) // Enhanced normal glow
-          material.color = new ConstantProperty(Color.fromCssColorString('#E7D1A7').withAlpha(0.95)) // Higher normal opacity
+          material.glowPower = new ConstantProperty(0.8) // Strong normal glow
+          material.color = new ConstantProperty(Color.fromCssColorString('#DAA520').withAlpha(1.0)) // Deep golden rod normal
         }
       }
     }
@@ -211,22 +252,27 @@ export function addSimpleRoute(viewer: Viewer, stops: Stop[]): Entity[] {
     if (fromStop.lat != null && fromStop.lng != null && 
         toStop.lat != null && toStop.lng != null) {
       
-      const positions = [
-        Cartesian3.fromDegrees(fromStop.lng, fromStop.lat),
-        Cartesian3.fromDegrees(toStop.lng, toStop.lat)
+      // Create elevated arc for simple route too
+      const elevatedPositions = [
+        Cartesian3.fromDegrees(fromStop.lng, fromStop.lat, 200000), // 200km elevation
+        Cartesian3.fromDegrees(toStop.lng, toStop.lat, 200000)
       ]
 
       const routeEntity = viewer.entities.add({
         id: `simple-route-${i}`,
         polyline: {
-          positions: positions,
-          width: 5, // More visible width
-          arcType: ArcType.GEODESIC,
+          positions: elevatedPositions,
+          width: 8,
+          arcType: ArcType.NONE, // Use elevated positions
+          clampToGround: false,
           material: new PolylineGlowMaterialProperty({
-            glowPower: new ConstantProperty(0.3),
-            color: new ConstantProperty(Color.fromCssColorString('#E7D1A7').withAlpha(0.9))
+            glowPower: new ConstantProperty(0.8),
+            color: new ConstantProperty(Color.fromCssColorString('#DAA520').withAlpha(1.0))
           }),
-          zIndex: -1
+          depthFailMaterial: new PolylineGlowMaterialProperty({
+            glowPower: new ConstantProperty(0.8),
+            color: new ConstantProperty(Color.fromCssColorString('#DAA520').withAlpha(1.0))
+          })
         }
       })
 

@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Viewer } from 'cesium'
+import { 
+  Cartesian3, 
+  Math as CesiumMath, 
+  HeadingPitchRange,
+  EasingFunction
+} from 'cesium'
 import { createViewer } from '../lib/cesium/createViewer'
 import { VenueMarkerManager } from '../lib/cesium/markerUtils'
 import { PremiumCameraManager } from '../lib/cesium/cameraUtils'
@@ -196,16 +202,37 @@ export function Globe({
     }
   }, [onSelectStop])
 
-  // Fly to selected stop when selection changes (using premium camera)
+  // Fly to selected stop when selection changes (direct viewer.flyTo)
   useEffect(() => {
-    if (cameraManagerRef.current && selectedStopId && stops.length > 0 && isReady) {
+    if (viewerRef.current && selectedStopId && stops.length > 0 && isReady) {
       const selectedStop = stops.find(stop => stop.id === selectedStopId)
-      if (selectedStop) {
-        // Small delay to ensure marker is updated first and for premium feel
-        setTimeout(() => {
-          console.log(`[Globe] Flying to selected stop: ${selectedStop.city}`)
-          cameraManagerRef.current?.flyToStop(selectedStop, 2.0) // Slightly longer for cinematic feel
-        }, 150)
+      if (selectedStop && selectedStop.lat && selectedStop.lng) {
+        console.log(`[Globe] Flying to selected stop: ${selectedStop.city}`)
+        
+        // Try to find marker entity first
+        const markerEntity = markerManagerRef.current?.getMarkerEntity?.(selectedStopId)
+        
+        if (markerEntity) {
+          // Fly to entity with offset
+          const offset = new HeadingPitchRange(
+            CesiumMath.toRadians(0),
+            CesiumMath.toRadians(-40),
+            2500 // range meters
+          )
+          viewerRef.current.flyTo(markerEntity, { duration: 2.0, offset })
+        } else {
+          // Fallback to camera.flyTo
+          viewerRef.current.camera.flyTo({
+            destination: Cartesian3.fromDegrees(selectedStop.lng, selectedStop.lat, 3500),
+            orientation: { 
+              heading: 0, 
+              pitch: CesiumMath.toRadians(-40), 
+              roll: 0 
+            },
+            duration: 2.0,
+            easingFunction: EasingFunction.CUBIC_IN_OUT,
+          })
+        }
       }
     }
   }, [selectedStopId, stops, isReady])

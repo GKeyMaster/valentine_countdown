@@ -303,6 +303,13 @@ export class VenueMarkerManager {
   }
 
   /**
+   * Gets marker entity for a specific stop ID
+   */
+  getMarkerEntity(stopId: string): Entity | undefined {
+    return this.markers.get(stopId)
+  }
+
+  /**
    * Cleans up resources
    */
   destroy(): void {

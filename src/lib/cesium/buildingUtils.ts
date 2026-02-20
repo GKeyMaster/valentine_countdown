@@ -109,9 +109,12 @@ export class BuildingManager {
     const buildingUrl = `/data/buildings/${stopId}.geojson`
     
     try {
-      // Load GeoJSON data with extrusion support
+      // Load GeoJSON data with extrusion support and no default styling
       const dataSource = await GeoJsonDataSource.load(buildingUrl, {
-        clampToGround: false // Enable extrusion
+        clampToGround: false,
+        stroke: Color.TRANSPARENT,
+        fill: Color.TRANSPARENT,
+        strokeWidth: 0,
       })
       
       console.log(`[Buildings] Loaded ${dataSource.entities.values.length} buildings for ${stop.city}`)
@@ -129,8 +132,13 @@ export class BuildingManager {
         }
       }
       
-      // Configure 3D extrusion for each building
-      buildingsToShow.forEach((entity, index) => {
+      // Configure 3D extrusion for each building (apply styling before removing extras)
+      dataSource.entities.values.forEach((entity, index) => {
+        // Kill yellow outlines from polylines
+        if (entity.polyline) {
+          entity.polyline.show = new ConstantProperty(false)
+        }
+        
         if (entity.polygon) {
           const properties = entity.properties?.getValue(this.viewer.clock.currentTime) || {}
           
@@ -138,26 +146,37 @@ export class BuildingManager {
           const height = calculateBuildingHeight(properties)
           
           // Configure polygon for 3D extrusion
+          entity.polygon.outline = new ConstantProperty(false)
           entity.polygon.height = new ConstantProperty(0) // Ground level
           entity.polygon.extrudedHeight = new ConstantProperty(height) // Extrude upward
           entity.polygon.heightReference = new ConstantProperty(HeightReference.CLAMP_TO_GROUND)
           
-          // Apply material with variation (ColorMaterialProperty for Entity)
-          entity.polygon.material = createBuildingMaterial(index)
-          
-          // No outline for cleaner look
-          entity.polygon.outline = new ConstantProperty(false)
+          // Dark neutral material
+          entity.polygon.material = new ColorMaterialProperty(
+            Color.fromCssColorString("#141414").withAlpha(0.70)
+          )
           
           // Set name for debugging
           entity.name = `Building ${index + 1} (${height.toFixed(1)}m)`
         }
       })
       
+      // Now remove excess entities after styling
+      if (dataSource.entities.values.length > MAX_BUILDINGS_PER_STOP) {
+        console.log(`[Buildings] Limiting to first ${MAX_BUILDINGS_PER_STOP} buildings for performance`)
+        
+        const entities = dataSource.entities.values
+        for (let i = MAX_BUILDINGS_PER_STOP; i < entities.length; i++) {
+          dataSource.entities.remove(entities[i])
+        }
+      }
+      
       // Add to viewer
       await this.viewer.dataSources.add(dataSource)
       this.dataSources.set(stopId, dataSource)
       
-      console.log(`[Buildings] Configured ${buildingsToShow.length} 3D buildings for ${stop.city}`)
+      const finalCount = Math.min(dataSource.entities.values.length, MAX_BUILDINGS_PER_STOP)
+      console.log(`[Buildings] Configured ${finalCount} 3D buildings for ${stop.city}`)
       
     } catch (error) {
       console.warn(`[Buildings] Failed to load buildings for ${stop.city}:`, error)

@@ -7,9 +7,7 @@ import {
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   defined,
-  ConstantProperty,
-  Color,
-  HeightReference
+  ConstantProperty
 } from 'cesium'
 import type { Stop } from '../data/types'
 
@@ -113,31 +111,6 @@ export function createMarkerCanvas(isSelected = false): HTMLCanvasElement {
   return canvas
 }
 
-/**
- * Creates a smooth, elegant selection indicator for selected venues
- */
-export function createSelectionIndicator(stop: Stop): Entity {
-  const position = Cartesian3.fromDegrees(stop.lng ?? 0, stop.lat ?? 0)
-  
-  return new Entity({
-    id: `${stop.id}-selection`,
-    position: position,
-    ellipse: {
-      semiMajorAxis: 80000, // 80km radius for visible selection area
-      semiMinorAxis: 80000,
-      height: 1000, // Slightly above surface
-      material: Color.fromCssColorString('#E7D1A7').withAlpha(0.15), // Subtle golden glow
-      outline: true,
-      outlineColor: Color.fromCssColorString('#E7D1A7').withAlpha(0.6),
-      outlineWidth: 2,
-      heightReference: HeightReference.RELATIVE_TO_GROUND
-    },
-    properties: {
-      isSelectionIndicator: true,
-      stopId: stop.id
-    }
-  })
-}
 
 /**
  * Creates a Cesium Entity for a venue marker
@@ -175,7 +148,6 @@ export function createVenueMarker(stop: Stop, isSelected = false): Entity {
 export class VenueMarkerManager {
   private viewer: Viewer
   private markers: Map<string, Entity> = new Map()
-  private selectionIndicators: Map<string, Entity> = new Map()
   private clickHandler: ScreenSpaceEventHandler | null = null
   private onMarkerClick: ((stopId: string) => void) | null = null
   private hoveredEntity: Entity | null = null
@@ -276,13 +248,6 @@ export class VenueMarkerManager {
       }
     }
     
-    // Remove selection indicators that are no longer needed
-    for (const [stopId, entity] of this.selectionIndicators) {
-      if (!currentStopIds.has(stopId)) {
-        this.viewer.entities.remove(entity)
-        this.selectionIndicators.delete(stopId)
-      }
-    }
 
     // Add or update markers for current stops
     for (const stop of stops) {
@@ -301,13 +266,7 @@ export class VenueMarkerManager {
         this.markers.set(stop.id, marker)
       }
       
-      // Selection indicators disabled - using only marker visual changes
-      // Remove any existing selection indicators
-      const existingIndicator = this.selectionIndicators.get(stop.id)
-      if (existingIndicator) {
-        this.viewer.entities.remove(existingIndicator)
-        this.selectionIndicators.delete(stop.id)
-      }
+      // No selection indicators - only marker visual changes
     }
   }
 
@@ -354,10 +313,5 @@ export class VenueMarkerManager {
     }
     this.markers.clear()
     
-    // Remove all selection indicators
-    for (const entity of this.selectionIndicators.values()) {
-      this.viewer.entities.remove(entity)
-    }
-    this.selectionIndicators.clear()
   }
 }

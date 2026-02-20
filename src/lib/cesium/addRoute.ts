@@ -49,13 +49,9 @@ export class RouteManager {
         
         const routeSegment = this.createRouteSegment(fromStop, toStop, i)
         
-        // Add subtle delay for elegant appearance
-        setTimeout(() => {
-          if (this.viewer && !this.viewer.isDestroyed()) {
-            this.viewer.entities.add(routeSegment)
-            this.routeEntities.push(routeSegment)
-          }
-        }, i * 200) // 200ms delay between each segment for smooth appearance
+        // Add immediately for stable rendering - no delays
+        this.viewer.entities.add(routeSegment)
+        this.routeEntities.push(routeSegment)
       }
     }
 
@@ -82,16 +78,16 @@ export class RouteManager {
           taperPower: new ConstantProperty(1.0), // No taper for consistent visibility
           color: new ConstantProperty(Color.fromCssColorString('#D4AF37').withAlpha(0.95)) // Deeper golden color
         }),
-        // Stable rendering properties to prevent blinking
+        // Maximum stability rendering properties
+        show: true, // Use primitive boolean for maximum stability
+        zIndex: 1000, // Render above terrain but below markers
+        distanceDisplayCondition: undefined,
+        // Stable depth handling
         depthFailMaterial: new PolylineGlowMaterialProperty({
           glowPower: new ConstantProperty(0.2),
           taperPower: new ConstantProperty(1.0),
           color: new ConstantProperty(Color.fromCssColorString('#D4AF37').withAlpha(0.7))
-        }),
-        // Ensure stable rendering during imagery changes
-        show: new ConstantProperty(true),
-        zIndex: 1000, // Render above terrain but below markers
-        distanceDisplayCondition: undefined
+        })
       },
       // Store route metadata
       properties: {
@@ -131,25 +127,11 @@ export class RouteManager {
 
 
   /**
-   * Updates route visibility based on camera distance for elegant presentation
+   * Routes are always visible - no dynamic visibility updates needed
    */
   updateRouteVisibility(): void {
-    // Always show routes - remove altitude-based hiding to prevent blinking
-    // Routes are now always visible for consistent user experience
-    const shouldShowRoute = true
-    
-    this.routeEntities.forEach(entity => {
-      if (entity.polyline) {
-        entity.show = shouldShowRoute
-        
-        // Maintain stable appearance regardless of camera or imagery changes
-        const material = entity.polyline.material as PolylineGlowMaterialProperty
-        if (material) {
-          // Keep consistent deep golden color
-          material.color = new ConstantProperty(Color.fromCssColorString('#D4AF37').withAlpha(0.95))
-        }
-      }
-    })
+    // No-op - routes are always visible to prevent any blinking
+    // All visibility is handled at creation time
   }
 
   /**
@@ -244,6 +226,7 @@ export function addSimpleRoute(viewer: Viewer, stops: Stop[]): Entity[] {
           width: 4,
           arcType: ArcType.GEODESIC,
           clampToGround: false,
+          show: true, // Use primitive boolean for stability
           material: new PolylineGlowMaterialProperty({
             glowPower: new ConstantProperty(0.25),
             color: new ConstantProperty(Color.fromCssColorString('#D4AF37').withAlpha(0.9))

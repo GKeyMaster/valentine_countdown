@@ -84,12 +84,7 @@ export function Globe({
           markerManagerRef.current.setOnMarkerClick(onSelectStop)
         }
 
-        // Set up camera change listener for route visibility
-        if (routeManagerRef.current) {
-          result.viewer.camera.changed.addEventListener(() => {
-            routeManagerRef.current?.updateRouteVisibility()
-          })
-        }
+        // Routes are now always visible - no camera change listener needed
         
         // Set initial camera position if we have stops
         if (stops.length > 0) {

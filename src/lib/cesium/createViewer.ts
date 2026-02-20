@@ -153,7 +153,8 @@ export async function createViewer(container: HTMLElement, creditContainer?: HTM
       } catch (error) {
         // Suppress errors during initialization checks
         if (attempts % 5 === 0) { // Log every 5th attempt
-          console.warn(`Scene check attempt ${attempts}:`, error.message || error)
+          const errorMessage = error instanceof Error ? error.message : String(error)
+          console.warn(`Scene check attempt ${attempts}:`, errorMessage)
         }
       }
       

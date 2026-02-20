@@ -1,29 +1,25 @@
-import { useEffect, useRef } from 'react';
-import { Viewer } from 'cesium';
-import { createViewer } from '../lib/cesium/createViewer';
-import 'cesium/Build/Cesium/Widgets/widgets.css';
+import { useEffect, useRef } from 'react'
+import { Viewer } from 'cesium'
+import { createViewer } from '../lib/cesium/createViewer'
 
 export function Globe() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<Viewer | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null)
+  const viewerRef = useRef<Viewer | null>(null)
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current) return
 
-    // Create the Cesium viewer
-    const viewer = createViewer({
-      container: containerRef.current,
-    });
+    // Create Cesium viewer
+    viewerRef.current = createViewer(containerRef.current)
 
-    viewerRef.current = viewer;
-
-    // Cleanup function
+    // Cleanup on unmount
     return () => {
-      if (viewerRef.current && !viewerRef.current.isDestroyed()) {
-        viewerRef.current.destroy();
+      if (viewerRef.current) {
+        viewerRef.current.destroy()
+        viewerRef.current = null
       }
-    };
-  }, []);
+    }
+  }, [])
 
   return (
     <div 
@@ -31,10 +27,10 @@ export function Globe() {
       style={{
         width: '100%',
         height: '100%',
-        margin: 0,
-        padding: 0,
-        overflow: 'hidden',
+        position: 'absolute',
+        top: 0,
+        left: 0
       }}
     />
-  );
+  )
 }

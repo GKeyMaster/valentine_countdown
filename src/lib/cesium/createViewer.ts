@@ -2,32 +2,26 @@ import {
   Viewer,
   EllipsoidTerrainProvider,
   UrlTemplateImageryProvider,
-  GeographicTilingScheme,
-  Rectangle,
-} from 'cesium';
+  GeographicTilingScheme
+} from 'cesium'
 
-export interface ViewerOptions {
-  container: HTMLElement;
-}
+export function createViewer(container: HTMLElement): Viewer {
+  // Create terrain provider (no Ion required)
+  const terrainProvider = new EllipsoidTerrainProvider()
 
-export function createViewer({ container }: ViewerOptions): Viewer {
-  // Create the NASA GIBS Blue Marble imagery provider
+  // Create imagery provider using NASA GIBS BlueMarble
   const imageryProvider = new UrlTemplateImageryProvider({
     url: 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/BlueMarble_ShadedRelief_Bathymetry/default//EPSG4326_500m/{z}/{y}/{x}.jpeg',
     tilingScheme: new GeographicTilingScheme(),
-    maximumLevel: 8,
-    rectangle: Rectangle.fromDegrees(-180, -90, 180, 90),
-  });
+    maximumLevel: 8
+  })
 
-  // Create the terrain provider (ellipsoid - no elevation data)
-  const terrainProvider = new EllipsoidTerrainProvider();
-
-  // Create the viewer with minimal UI
+  // Create viewer with minimal UI
   const viewer = new Viewer(container, {
     // Terrain
     terrainProvider,
     
-    // Disable UI elements
+    // Disable UI clutter
     animation: false,
     timeline: false,
     geocoder: false,
@@ -37,16 +31,13 @@ export function createViewer({ container }: ViewerOptions): Viewer {
     navigationHelpButton: false,
     fullscreenButton: false,
     
-    // Other settings
-    requestRenderMode: true,
-    maximumRenderTimeChange: Infinity,
-  });
+    // Keep credit display for attribution
+    creditContainer: undefined
+  })
 
-  // Remove default imagery layers if any were added
-  viewer.imageryLayers.removeAll();
-  
-  // Add our custom imagery layer
-  viewer.imageryLayers.addImageryProvider(imageryProvider);
+  // Replace the default imagery with NASA GIBS
+  viewer.imageryLayers.removeAll()
+  viewer.imageryLayers.addImageryProvider(imageryProvider)
 
-  return viewer;
+  return viewer
 }

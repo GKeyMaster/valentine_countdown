@@ -1,46 +1,41 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
+import { resolve } from 'path'
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     viteStaticCopy({
       targets: [
         {
-          src: 'node_modules/cesium/Build/Cesium/Workers',
-          dest: 'cesium'
+          src: 'node_modules/cesium/Build/Cesium/Workers/*',
+          dest: 'cesium/Workers'
         },
         {
-          src: 'node_modules/cesium/Build/Cesium/Assets',
-          dest: 'cesium'
+          src: 'node_modules/cesium/Build/Cesium/Assets/*',
+          dest: 'cesium/Assets'
         },
         {
-          src: 'node_modules/cesium/Build/Cesium/Widgets',
-          dest: 'cesium'
+          src: 'node_modules/cesium/Build/Cesium/Widgets/*',
+          dest: 'cesium/Widgets'
         },
         {
-          src: 'node_modules/cesium/Build/Cesium/ThirdParty',
-          dest: 'cesium'
+          src: 'node_modules/cesium/Build/Cesium/ThirdParty/*',
+          dest: 'cesium/ThirdParty'
         }
       ]
     })
   ],
   define: {
-    // Define Cesium base URL for static assets
+    // Define global variables for Cesium
     CESIUM_BASE_URL: JSON.stringify('/cesium/')
   },
-  build: {
-    // Optimize for Vercel deployment
-    target: 'es2015',
-    minify: 'esbuild',
-    sourcemap: false,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          cesium: ['cesium']
-        }
+  css: {
+    preprocessorOptions: {
+      css: {
+        // Import Cesium CSS
+        additionalData: `@import "cesium/Build/Cesium/Widgets/widgets.css";`
       }
     }
   }

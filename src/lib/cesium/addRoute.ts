@@ -49,9 +49,13 @@ export class RouteManager {
         
         const routeSegment = this.createRouteSegment(fromStop, toStop, i)
         
-        // Add immediately - no delays that might cause issues
-        this.viewer.entities.add(routeSegment)
-        this.routeEntities.push(routeSegment)
+        // Add subtle delay for elegant appearance
+        setTimeout(() => {
+          if (this.viewer && !this.viewer.isDestroyed()) {
+            this.viewer.entities.add(routeSegment)
+            this.routeEntities.push(routeSegment)
+          }
+        }, i * 200) // 200ms delay between each segment for smooth appearance
       }
     }
 
@@ -59,26 +63,32 @@ export class RouteManager {
   }
 
   /**
-   * Creates a single route segment between two stops with elevated arc
+   * Creates a single route segment between two stops with elevation
    */
   private createRouteSegment(fromStop: Stop, toStop: Stop, segmentIndex: number): Entity {
-    // Calculate arc positions with elevation for visibility above surface
-    const positions = this.createElevatedArcPositions(fromStop, toStop)
+    // Create multiple points for a smooth elevated arc
+    const positions = this.createElevatedArc(fromStop, toStop, 50000)
 
-    // Create ultra-visible polyline with deep golden color
+    // Create visible polyline with deeper golden glow
     const routeEntity = new Entity({
       id: `route-segment-${segmentIndex}`,
       polyline: {
         positions: positions,
-        width: 8, // Even wider for maximum visibility
-        arcType: ArcType.NONE, // Use custom arc positions instead of geodesic
-        clampToGround: false, // Above surface
+        width: 6, // Thicker for better visibility
+        arcType: ArcType.NONE, // Use our custom arc points
+        clampToGround: false,
         material: new PolylineGlowMaterialProperty({
-          glowPower: new ConstantProperty(0.4), // Reduced glow for stability
-          taperPower: new ConstantProperty(0.7), // Less aggressive taper
-          color: new ConstantProperty(Color.fromCssColorString('#DAA520').withAlpha(1.0)) // Deep golden rod, full opacity
+          glowPower: new ConstantProperty(0.3), // More visible glow
+          taperPower: new ConstantProperty(1.0), // No taper for consistent visibility
+          color: new ConstantProperty(Color.fromCssColorString('#D4AF37').withAlpha(0.95)) // Deeper golden color
         }),
-        // Make always visible
+        // Stable rendering properties to prevent blinking
+        depthFailMaterial: new PolylineGlowMaterialProperty({
+          glowPower: new ConstantProperty(0.2),
+          taperPower: new ConstantProperty(1.0),
+          color: new ConstantProperty(Color.fromCssColorString('#D4AF37').withAlpha(0.7))
+        }),
+        zIndex: 1000, // Render above terrain but below markers
         distanceDisplayCondition: undefined
       },
       // Store route metadata
@@ -92,38 +102,26 @@ export class RouteManager {
 
     return routeEntity
   }
-
+  
   /**
-   * Creates low-altitude arc positions between two cities - very close to surface
+   * Creates an elevated arc between two points for smooth route visualization
    */
-  private createElevatedArcPositions(fromStop: Stop, toStop: Stop): Cartesian3[] {
-    const startLon = fromStop.lng!
-    const startLat = fromStop.lat!
-    const endLon = toStop.lng!
-    const endLat = toStop.lat!
-    
-    // Calculate distance to determine arc height
-    const distance = Math.sqrt(
-      Math.pow(endLon - startLon, 2) + Math.pow(endLat - startLat, 2)
-    )
-    
-    // Very low arc height - just barely above surface for visibility
-    const maxHeight = Math.max(10000, distance * 3000) // Minimum 10km elevation, very low multiplier
-    
+  private createElevatedArc(fromStop: Stop, toStop: Stop, baseElevation: number): Cartesian3[] {
     const positions: Cartesian3[] = []
-    const segments = 20 // Even fewer segments for simplicity
+    const steps = 20 // More points for smoother arc
     
-    for (let i = 0; i <= segments; i++) {
-      const t = i / segments
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps
       
-      // Linear interpolation for lat/lon
-      const lon = startLon + (endLon - startLon) * t
-      const lat = startLat + (endLat - startLat) * t
+      // Interpolate lat/lng
+      const lat = fromStop.lat! + (toStop.lat! - fromStop.lat!) * t
+      const lng = fromStop.lng! + (toStop.lng! - fromStop.lng!) * t
       
-      // Very shallow parabolic arc for height
-      const height = maxHeight * Math.sin(Math.PI * t)
+      // Create arc elevation (higher in the middle)
+      const arcHeight = Math.sin(t * Math.PI) * 200000 // Peak at 200km
+      const elevation = baseElevation + arcHeight
       
-      positions.push(Cartesian3.fromDegrees(lon, lat, height))
+      positions.push(Cartesian3.fromDegrees(lng, lat, elevation))
     }
     
     return positions
@@ -131,14 +129,27 @@ export class RouteManager {
 
 
   /**
-   * Routes are always visible - no dynamic visibility changes to prevent blinking
+   * Updates route visibility based on camera distance for elegant presentation
    */
   updateRouteVisibility(): void {
-    // Do nothing - routes are always visible
-    // This method exists for compatibility but doesn't change visibility
+    const cameraHeight = this.viewer.camera.positionCartographic.height
+    
+    // Show route when zoomed out enough to see the tour overview
+    // More permissive range to prevent blinking
+    const shouldShowRoute = cameraHeight > 500000 // Show when >500km altitude
+    
     this.routeEntities.forEach(entity => {
       if (entity.polyline) {
-        entity.show = true // Always visible
+        entity.show = shouldShowRoute
+        
+        // Stable opacity - no dynamic changes to prevent blinking
+        if (shouldShowRoute) {
+          const material = entity.polyline.material as PolylineGlowMaterialProperty
+          if (material) {
+            // Keep consistent deep golden color
+            material.color = new ConstantProperty(Color.fromCssColorString('#D4AF37').withAlpha(0.95))
+          }
+        }
       }
     })
   }
@@ -152,11 +163,11 @@ export class RouteManager {
       const material = entity.polyline.material as PolylineGlowMaterialProperty
       if (material) {
         if (highlight) {
-          material.glowPower = new ConstantProperty(1.0) // Maximum glow when highlighted
-          material.color = new ConstantProperty(Color.fromCssColorString('#FFD700').withAlpha(1.0)) // Bright gold when highlighted
+          material.glowPower = new ConstantProperty(0.25) // Stronger glow when highlighted
+          material.color = new ConstantProperty(Color.fromCssColorString('#E7D1A7').withAlpha(1.0)) // Full opacity
         } else {
-          material.glowPower = new ConstantProperty(0.8) // Strong normal glow
-          material.color = new ConstantProperty(Color.fromCssColorString('#DAA520').withAlpha(1.0)) // Deep golden rod normal
+          material.glowPower = new ConstantProperty(0.15) // Normal glow
+          material.color = new ConstantProperty(Color.fromCssColorString('#E7D1A7').withAlpha(0.8)) // Normal transparency
         }
       }
     }
@@ -207,7 +218,7 @@ export class RouteManager {
 }
 
 /**
- * Utility function to create a simple route between stops
+ * Utility function to create a simple elevated route between stops
  */
 export function addSimpleRoute(viewer: Viewer, stops: Stop[]): Entity[] {
   if (stops.length < 2) return []
@@ -222,24 +233,24 @@ export function addSimpleRoute(viewer: Viewer, stops: Stop[]): Entity[] {
     if (fromStop.lat != null && fromStop.lng != null && 
         toStop.lat != null && toStop.lng != null) {
       
-      // Create very low elevation arc for simple route
-      const elevatedPositions = [
-        Cartesian3.fromDegrees(fromStop.lng, fromStop.lat, 10000), // 10km elevation - very low
-        Cartesian3.fromDegrees(toStop.lng, toStop.lat, 10000)
+      // Create elevated positions
+      const positions = [
+        Cartesian3.fromDegrees(fromStop.lng, fromStop.lat, 100000), // 100km elevation
+        Cartesian3.fromDegrees(toStop.lng, toStop.lat, 100000)
       ]
 
       const routeEntity = viewer.entities.add({
         id: `simple-route-${i}`,
         polyline: {
-          positions: elevatedPositions,
-          width: 8,
-          arcType: ArcType.NONE, // Use elevated positions
+          positions: positions,
+          width: 4,
+          arcType: ArcType.GEODESIC,
           clampToGround: false,
           material: new PolylineGlowMaterialProperty({
-            glowPower: new ConstantProperty(0.4),
-            taperPower: new ConstantProperty(0.7),
-            color: new ConstantProperty(Color.fromCssColorString('#DAA520').withAlpha(1.0))
-          })
+            glowPower: new ConstantProperty(0.25),
+            color: new ConstantProperty(Color.fromCssColorString('#D4AF37').withAlpha(0.9))
+          }),
+          zIndex: 1000
         }
       })
 

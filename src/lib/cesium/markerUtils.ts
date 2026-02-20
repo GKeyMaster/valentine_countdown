@@ -7,84 +7,136 @@ import {
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   defined,
-  ConstantProperty
+  ConstantProperty,
+  Color,
+  HeightReference
 } from 'cesium'
 import type { Stop } from '../data/types'
 
 /**
- * Creates a perfectly round marker with distinct selected/unselected states
+ * Creates a high-resolution, premium marker icon for venue locations
  */
-export function createMarkerImage(isSelected = false): string {
-  const size = 40 // Fixed size for consistency
-  const radius = isSelected ? 18 : 15 // Different sizes for states
+export function createMarkerCanvas(isSelected = false): HTMLCanvasElement {
+  const canvas = document.createElement('canvas')
+  // Higher resolution for crisp rendering
+  const size = isSelected ? 32 : 28
+  const scale = 2 // Render at 2x for high DPI displays
+  canvas.width = size * scale
+  canvas.height = size * scale
+  canvas.style.width = `${size}px`
+  canvas.style.height = `${size}px`
   
-  // Distinct colors for each state
-  const colors = isSelected ? {
-    outer: '#FFD700',      // Bright gold
-    middle: '#FFA500',     // Orange
-    inner: '#FF6347',      // Tomato red
-    stroke: '#8B0000',     // Dark red
-    glow: '#FFD700'        // Gold glow
-  } : {
-    outer: '#87CEEB',      // Sky blue
-    middle: '#4682B4',     // Steel blue
-    inner: '#191970',      // Midnight blue
-    stroke: '#000080',     // Navy
-    glow: '#87CEEB'        // Blue glow
+  const ctx = canvas.getContext('2d')!
+  ctx.scale(scale, scale)
+  
+  const center = size / 2
+  const radius = isSelected ? 14 : 12
+  
+  // Enable anti-aliasing for smooth edges
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = 'high'
+  
+  if (isSelected) {
+    // Selected marker: Golden with glow effect
+    // Outer glow
+    const gradient = ctx.createRadialGradient(center, center, 0, center, center, radius + 4)
+    gradient.addColorStop(0, 'rgba(231, 209, 167, 0.8)')
+    gradient.addColorStop(0.7, 'rgba(231, 209, 167, 0.3)')
+    gradient.addColorStop(1, 'rgba(231, 209, 167, 0)')
+    ctx.fillStyle = gradient
+    ctx.beginPath()
+    ctx.arc(center, center, radius + 4, 0, 2 * Math.PI)
+    ctx.fill()
+    
+    // Main circle with gradient
+    const mainGradient = ctx.createRadialGradient(center - 3, center - 3, 0, center, center, radius)
+    mainGradient.addColorStop(0, '#F5E6C8')
+    mainGradient.addColorStop(0.6, '#E7D1A7')
+    mainGradient.addColorStop(1, '#D4B886')
+    ctx.fillStyle = mainGradient
+    ctx.beginPath()
+    ctx.arc(center, center, radius, 0, 2 * Math.PI)
+    ctx.fill()
+    
+    // Inner shadow
+    ctx.fillStyle = 'rgba(26, 31, 46, 0.3)'
+    ctx.beginPath()
+    ctx.arc(center, center, radius - 2, 0, 2 * Math.PI)
+    ctx.fill()
+    
+    // Center highlight
+    const centerGradient = ctx.createRadialGradient(center - 1, center - 1, 0, center, center, 4)
+    centerGradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)')
+    centerGradient.addColorStop(1, 'rgba(231, 209, 167, 0.8)')
+    ctx.fillStyle = centerGradient
+    ctx.beginPath()
+    ctx.arc(center, center, 4, 0, 2 * Math.PI)
+    ctx.fill()
+  } else {
+    // Unselected marker: Clean white with subtle shadow
+    // Drop shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'
+    ctx.beginPath()
+    ctx.arc(center + 1, center + 1, radius, 0, 2 * Math.PI)
+    ctx.fill()
+    
+    // Main circle with gradient
+    const mainGradient = ctx.createRadialGradient(center - 2, center - 2, 0, center, center, radius)
+    mainGradient.addColorStop(0, '#FFFFFF')
+    mainGradient.addColorStop(0.7, '#F8F9FA')
+    mainGradient.addColorStop(1, '#E9ECEF')
+    ctx.fillStyle = mainGradient
+    ctx.beginPath()
+    ctx.arc(center, center, radius, 0, 2 * Math.PI)
+    ctx.fill()
+    
+    // Border
+    ctx.strokeStyle = 'rgba(26, 31, 46, 0.2)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.arc(center, center, radius, 0, 2 * Math.PI)
+    ctx.stroke()
+    
+    // Inner circle
+    ctx.fillStyle = 'rgba(26, 31, 46, 0.8)'
+    ctx.beginPath()
+    ctx.arc(center, center, radius - 4, 0, 2 * Math.PI)
+    ctx.fill()
+    
+    // Center dot
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
+    ctx.beginPath()
+    ctx.arc(center, center, 2, 0, 2 * Math.PI)
+    ctx.fill()
   }
   
-  const svg = `
-    <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <radialGradient id="grad${isSelected ? 'Sel' : 'Unsel'}" cx="50%" cy="30%" r="70%">
-          <stop offset="0%" style="stop-color:${colors.outer};stop-opacity:1" />
-          <stop offset="70%" style="stop-color:${colors.middle};stop-opacity:1" />
-          <stop offset="100%" style="stop-color:${colors.inner};stop-opacity:1" />
-        </radialGradient>
-        <filter id="glow${isSelected ? 'Sel' : 'Unsel'}" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-          <feMerge>
-            <feMergeNode in="coloredBlur"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
-      </defs>
-      
-      <!-- Outer glow circle -->
-      <circle cx="${size/2}" cy="${size/2}" r="${radius + 4}" 
-              fill="${colors.glow}" 
-              opacity="0.3"/>
-      
-      <!-- Main circle with gradient -->
-      <circle cx="${size/2}" cy="${size/2}" r="${radius}" 
-              fill="url(#grad${isSelected ? 'Sel' : 'Unsel'})" 
-              stroke="${colors.stroke}" 
-              stroke-width="2"
-              filter="url(#glow${isSelected ? 'Sel' : 'Unsel'})"/>
-      
-      <!-- Inner highlight -->
-      <circle cx="${size/2 - 3}" cy="${size/2 - 3}" r="3" 
-              fill="white" 
-              opacity="0.8"/>
-      
-      <!-- Center dot -->
-      <circle cx="${size/2}" cy="${size/2}" r="4" 
-              fill="${colors.stroke}"/>
-    </svg>
-  `
-  
-  return `data:image/svg+xml;base64,${btoa(svg)}`
+  return canvas
 }
 
 /**
- * Legacy function for backward compatibility
+ * Creates a smooth, elegant selection indicator for selected venues
  */
-export function createMarkerCanvas(): HTMLCanvasElement {
-  // Create a simple canvas that will be replaced by the image
-  const canvas = document.createElement('canvas')
-  canvas.width = 1
-  canvas.height = 1
-  return canvas
+export function createSelectionIndicator(stop: Stop): Entity {
+  const position = Cartesian3.fromDegrees(stop.lng ?? 0, stop.lat ?? 0)
+  
+  return new Entity({
+    id: `${stop.id}-selection`,
+    position: position,
+    ellipse: {
+      semiMajorAxis: 80000, // 80km radius for visible selection area
+      semiMinorAxis: 80000,
+      height: 1000, // Slightly above surface
+      material: Color.fromCssColorString('#E7D1A7').withAlpha(0.15), // Subtle golden glow
+      outline: true,
+      outlineColor: Color.fromCssColorString('#E7D1A7').withAlpha(0.6),
+      outlineWidth: 2,
+      heightReference: HeightReference.RELATIVE_TO_GROUND
+    },
+    properties: {
+      isSelectionIndicator: true,
+      stopId: stop.id
+    }
+  })
 }
 
 /**
@@ -92,21 +144,20 @@ export function createMarkerCanvas(): HTMLCanvasElement {
  */
 export function createVenueMarker(stop: Stop, isSelected = false): Entity {
   const position = Cartesian3.fromDegrees(stop.lng ?? 0, stop.lat ?? 0)
-  const imageUrl = createMarkerImage(isSelected)
-  const size = 40 // Consistent size, visual difference is in the marker design
+  const canvas = createMarkerCanvas(isSelected)
   
   return new Entity({
     id: stop.id,
     position: position,
     billboard: {
-      image: new ConstantProperty(imageUrl),
-      width: size,
-      height: size,
-      verticalOrigin: VerticalOrigin.CENTER,
+      image: new ConstantProperty(canvas),
+      width: canvas.style.width ? parseInt(canvas.style.width) : canvas.width,
+      height: canvas.style.height ? parseInt(canvas.style.height) : canvas.height,
+      verticalOrigin: VerticalOrigin.BOTTOM,
       horizontalOrigin: HorizontalOrigin.CENTER,
       disableDepthTestDistance: Number.POSITIVE_INFINITY, // Always visible
       scale: 1.0,
-      pixelOffset: new Cartesian3(0, 0, 0)
+      pixelOffset: new Cartesian3(0, -8, 0) // Slight offset for better positioning
     },
     // Store stop data for easy access
     properties: {
@@ -124,6 +175,7 @@ export function createVenueMarker(stop: Stop, isSelected = false): Entity {
 export class VenueMarkerManager {
   private viewer: Viewer
   private markers: Map<string, Entity> = new Map()
+  private selectionIndicators: Map<string, Entity> = new Map()
   private clickHandler: ScreenSpaceEventHandler | null = null
   private onMarkerClick: ((stopId: string) => void) | null = null
   private hoveredEntity: Entity | null = null
@@ -223,6 +275,14 @@ export class VenueMarkerManager {
         this.markers.delete(stopId)
       }
     }
+    
+    // Remove selection indicators that are no longer needed
+    for (const [stopId, entity] of this.selectionIndicators) {
+      if (!currentStopIds.has(stopId)) {
+        this.viewer.entities.remove(entity)
+        this.selectionIndicators.delete(stopId)
+      }
+    }
 
     // Add or update markers for current stops
     for (const stop of stops) {
@@ -232,14 +292,26 @@ export class VenueMarkerManager {
       if (existingMarker) {
         // Update existing marker if selection state changed
         if (existingMarker.billboard) {
-          existingMarker.billboard.image = new ConstantProperty(createMarkerImage(isSelected))
-          // Size stays consistent, only image changes
+          existingMarker.billboard.image = new ConstantProperty(createMarkerCanvas(isSelected))
         }
       } else {
         // Create new marker
         const marker = createVenueMarker(stop, isSelected)
         this.viewer.entities.add(marker)
         this.markers.set(stop.id, marker)
+      }
+      
+      // Handle selection indicator
+      const existingIndicator = this.selectionIndicators.get(stop.id)
+      if (isSelected && !existingIndicator) {
+        // Add selection indicator
+        const indicator = createSelectionIndicator(stop)
+        this.viewer.entities.add(indicator)
+        this.selectionIndicators.set(stop.id, indicator)
+      } else if (!isSelected && existingIndicator) {
+        // Remove selection indicator
+        this.viewer.entities.remove(existingIndicator)
+        this.selectionIndicators.delete(stop.id)
       }
     }
   }
@@ -251,8 +323,7 @@ export class VenueMarkerManager {
     for (const [stopId, entity] of this.markers) {
       const isSelected = stopId === selectedStopId
       if (entity.billboard) {
-        entity.billboard.image = new ConstantProperty(createMarkerImage(isSelected))
-        // Size stays consistent, only image changes
+        entity.billboard.image = new ConstantProperty(createMarkerCanvas(isSelected))
       }
     }
   }
@@ -287,5 +358,11 @@ export class VenueMarkerManager {
       this.viewer.entities.remove(entity)
     }
     this.markers.clear()
+    
+    // Remove all selection indicators
+    for (const entity of this.selectionIndicators.values()) {
+      this.viewer.entities.remove(entity)
+    }
+    this.selectionIndicators.clear()
   }
 }

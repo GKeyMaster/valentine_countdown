@@ -84,8 +84,12 @@ export function Globe({
           markerManagerRef.current.setOnMarkerClick(onSelectStop)
         }
 
-        // No camera change listener - routes are always visible to prevent blinking
-        // Routes will be managed only when stops change, not during camera movement
+        // Set up camera change listener for route visibility
+        if (routeManagerRef.current) {
+          result.viewer.camera.changed.addEventListener(() => {
+            routeManagerRef.current?.updateRouteVisibility()
+          })
+        }
         
         // Set initial camera position if we have stops
         if (stops.length > 0) {

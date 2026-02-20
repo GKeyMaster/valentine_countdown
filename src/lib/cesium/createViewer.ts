@@ -40,10 +40,6 @@ export async function createViewer(container: HTMLElement, creditContainer?: HTM
     navigationHelpButton: false,
     fullscreenButton: false,
     
-    // Disable selection indicator and other debug visuals
-    selectionIndicator: false,
-    infoBox: false,
-    
     // Custom credit container for unobtrusive credits
     creditContainer: creditContainer
   })
@@ -102,18 +98,6 @@ export async function createViewer(container: HTMLElement, creditContainer?: HTM
   if (viewer.scene.postProcessStages && viewer.scene.postProcessStages.fxaa) {
     viewer.scene.postProcessStages.fxaa.enabled = true
   }
-
-  // Disable debug visuals and selection indicators
-  viewer.scene.debugShowFramesPerSecond = false
-  
-  // Hide selection indicator completely
-  if (viewer.selectionIndicator && viewer.selectionIndicator.container) {
-    const container = viewer.selectionIndicator.container as HTMLElement
-    container.style.display = 'none'
-  }
-  
-  // Ensure no default entity selection highlighting
-  viewer.selectedEntity = undefined
 
   // Store references for debugging
   ;(viewer as any).nightImageryLayer = nightImageryLayer

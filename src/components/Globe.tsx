@@ -1,17 +1,30 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { Viewer } from 'cesium'
 import { createViewer } from '../lib/cesium/createViewer'
+import { VenueMarkerManager } from '../lib/cesium/markerUtils'
+import type { Stop } from '../lib/data/types'
 
 interface GlobeProps {
   onReady?: (viewer: Viewer) => void
   onImageryReady?: () => void
   hideUntilReady?: boolean
+  stops?: Stop[]
+  selectedStopId?: string | null
+  onSelectStop?: (stopId: string) => void
 }
 
-export function Globe({ onReady, onImageryReady, hideUntilReady = false }: GlobeProps) {
+export function Globe({ 
+  onReady, 
+  onImageryReady, 
+  hideUntilReady = false, 
+  stops = [], 
+  selectedStopId = null, 
+  onSelectStop 
+}: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const creditContainerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<Viewer | null>(null)
+  const markerManagerRef = useRef<VenueMarkerManager | null>(null)
   const initOnceRef = useRef(false)
   const [isReady, setIsReady] = useState(false)
 
@@ -54,6 +67,13 @@ export function Globe({ onReady, onImageryReady, hideUntilReady = false }: Globe
         }
         
         setIsReady(true)
+        
+        // Initialize marker manager
+        markerManagerRef.current = new VenueMarkerManager(result.viewer)
+        if (onSelectStop) {
+          markerManagerRef.current.setOnMarkerClick(onSelectStop)
+        }
+        
         onReadyCallback(result.viewer)
       } catch (error) {
         console.error('Failed to initialize Cesium viewer:', error)
@@ -66,6 +86,10 @@ export function Globe({ onReady, onImageryReady, hideUntilReady = false }: Globe
     // Cleanup on unmount
     return () => {
       console.log('[Cesium] destroy viewer')
+      if (markerManagerRef.current) {
+        markerManagerRef.current.destroy()
+        markerManagerRef.current = null
+      }
       if (viewerRef.current) {
         viewerRef.current.destroy()
         viewerRef.current = null
@@ -81,6 +105,31 @@ export function Globe({ onReady, onImageryReady, hideUntilReady = false }: Globe
       onReadyCallback(viewerRef.current)
     }
   }, [onReadyCallback, isReady])
+
+  // Update markers when stops change
+  useEffect(() => {
+    if (markerManagerRef.current && stops.length > 0) {
+      console.log('[Globe] Updating markers for stops')
+      markerManagerRef.current.updateMarkers(stops, selectedStopId)
+    }
+  }, [stops, selectedStopId])
+
+  // Update marker click callback when onSelectStop changes
+  useEffect(() => {
+    if (markerManagerRef.current && onSelectStop) {
+      markerManagerRef.current.setOnMarkerClick(onSelectStop)
+    }
+  }, [onSelectStop])
+
+  // Fly to selected marker when selection changes
+  useEffect(() => {
+    if (markerManagerRef.current && selectedStopId && isReady) {
+      // Small delay to ensure marker is updated first
+      setTimeout(() => {
+        markerManagerRef.current?.flyToMarker(selectedStopId, 1.5)
+      }, 100)
+    }
+  }, [selectedStopId, isReady])
 
   return (
     <>

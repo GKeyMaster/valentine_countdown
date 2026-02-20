@@ -160,6 +160,9 @@ function App() {
         onReady={handleGlobeReady} 
         onImageryReady={handleImageryReady}
         hideUntilReady={showLoader}
+        stops={stops}
+        selectedStopId={selectedStopId}
+        onSelectStop={setSelectedStopId}
       />
       
       {/* Premium Layout System */}

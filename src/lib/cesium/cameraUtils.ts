@@ -1,6 +1,7 @@
 import {
   Viewer,
   Cartesian3,
+  BoundingSphere,
   Math as CesiumMath
 } from 'cesium'
 import type { Stop } from '../data/types'
@@ -49,6 +50,45 @@ export function calculateStopCameraPosition(stop: Stop): {
   }
   
   return { destination, orientation }
+}
+
+/**
+ * Calculates a bounding sphere that encompasses all stops
+ */
+export function calculateBoundingSphere(stops: Stop[]): BoundingSphere {
+  if (stops.length === 0) {
+    // Default to North America center
+    return new BoundingSphere(Cartesian3.fromDegrees(-95, 45, 0), 5000000)
+  }
+  
+  if (stops.length === 1) {
+    const stop = stops[0]
+    return new BoundingSphere(
+      Cartesian3.fromDegrees(stop.lng ?? 0, stop.lat ?? 0, 0), 
+      2000000 // 2000km radius for single stop
+    )
+  }
+  
+  // Convert all stop positions to Cartesian3
+  const positions = stops
+    .filter(stop => stop.lat != null && stop.lng != null)
+    .map(stop => Cartesian3.fromDegrees(stop.lng!, stop.lat!, 0))
+  
+  if (positions.length === 0) {
+    // Fallback if no valid positions
+    return new BoundingSphere(Cartesian3.fromDegrees(-95, 45, 0), 5000000)
+  }
+  
+  // Create bounding sphere from positions
+  const boundingSphere = BoundingSphere.fromPoints(positions)
+  
+  // Expand the radius slightly for better framing (add 20% padding)
+  boundingSphere.radius = boundingSphere.radius * 1.2
+  
+  // Ensure minimum radius for dramatic effect
+  boundingSphere.radius = Math.max(boundingSphere.radius, 1500000) // At least 1500km
+  
+  return boundingSphere
 }
 
 /**
@@ -207,6 +247,55 @@ export class PremiumCameraManager {
         cancel: () => {
           this.isFlying = false
           console.log('[Camera] Overview flight cancelled')
+          resolve()
+        }
+      })
+    })
+  }
+
+  /**
+   * Google Earth-style overview using bounding sphere (premium method)
+   */
+  flyToBoundingSphereOverview(stops: Stop[], duration = 2.8): Promise<void> {
+    if (this.isFlying) {
+      console.log('[Camera] Already flying, canceling current flight')
+      this.viewer.camera.cancelFlight()
+    }
+
+    this.isFlying = true
+    console.log('[Camera] Flying to bounding sphere overview (Google Earth style)')
+
+    const boundingSphere = calculateBoundingSphere(stops)
+
+    return new Promise((resolve) => {
+      this.viewer.camera.flyToBoundingSphere(boundingSphere, {
+        duration,
+        complete: () => {
+          // After reaching bounding sphere, apply a subtle tilt for premium feel
+          console.log('[Camera] Applying reset tilt')
+          this.viewer.camera.flyTo({
+            destination: this.viewer.camera.position,
+            orientation: {
+              heading: this.viewer.camera.heading,
+              pitch: CesiumMath.toRadians(-25), // Moderate tilt like Google Earth
+              roll: 0
+            },
+            duration: 0.8, // Quick tilt adjustment
+            easingFunction: cinematicEasing,
+            complete: () => {
+              this.isFlying = false
+              console.log('[Camera] Overview complete with tilt applied')
+              resolve()
+            },
+            cancel: () => {
+              this.isFlying = false
+              resolve()
+            }
+          })
+        },
+        cancel: () => {
+          this.isFlying = false
+          console.log('[Camera] Bounding sphere overview cancelled')
           resolve()
         }
       })

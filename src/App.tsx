@@ -95,6 +95,14 @@ function App() {
     }
   }, [stops, cameraManager])
 
+  // Overview button handler
+  const handleOverviewClick = useCallback(() => {
+    if (cameraManager && stops.length > 0) {
+      console.log('[App] Overview button clicked')
+      cameraManager.flyToBoundingSphereOverview(stops)
+    }
+  }, [cameraManager, stops])
+
   const handleImageryReady = useCallback(() => {
     console.log('[App] Imagery preload completed')
     setImageryReady(true)
@@ -195,7 +203,8 @@ function App() {
             stats={{ 
               dates: stops.length, 
               markets: new Set(stops.map(s => s.countryCode)).size 
-            }} 
+            }}
+            onOverviewClick={handleOverviewClick}
           />
         </div>
         

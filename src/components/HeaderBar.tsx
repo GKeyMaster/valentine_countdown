@@ -5,12 +5,14 @@ interface HeaderBarProps {
     dates: number
     markets: number
   }
+  onOverviewClick?: () => void
 }
 
 export function HeaderBar({ 
   title = "WORLD TOUR 2026",
   subtitle = "Premium Experience",
-  stats = { dates: 2, markets: 2 }
+  stats = { dates: 2, markets: 2 },
+  onOverviewClick
 }: HeaderBarProps) {
   return (
     <div className="header-container">
@@ -20,8 +22,18 @@ export function HeaderBar({
         <p className="main-subtitle">{subtitle}</p>
       </div>
       
-      {/* Stats Section */}
+      {/* Stats and Controls Section */}
       <div className="header-stats">
+        {/* Overview Button */}
+        <button 
+          className="overview-button"
+          onClick={onOverviewClick}
+          title="View entire tour route"
+        >
+          Overview
+        </button>
+        
+        {/* Stats */}
         <div className="stat-chip">
           Dates
           <span className="stat-chip-value">{stats.dates}</span>

@@ -43,11 +43,9 @@ export function Globe({ onReady }: GlobeProps) {
         }
 
         viewerRef.current = result.viewer
-        console.log('✅ Cesium viewer created')
         
         // Wait for imagery to be ready
         await result.isReady
-        console.log('🌍 Imagery ready')
         
         if (!mounted) return
 

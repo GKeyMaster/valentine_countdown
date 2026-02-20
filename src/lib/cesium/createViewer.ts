@@ -1,7 +1,7 @@
 import {
   Viewer,
   EllipsoidTerrainProvider,
-  WebMapTileServiceImageryProvider,
+  UrlTemplateImageryProvider,
   WebMercatorTilingScheme,
   Credit,
   JulianDate,
@@ -56,26 +56,17 @@ export async function createViewer(container: HTMLElement, creditContainer?: HTM
   viewer.screenSpaceEventHandler.removeInputAction(ScreenSpaceEventType.LEFT_CLICK)
   viewer.screenSpaceEventHandler.removeInputAction(ScreenSpaceEventType.LEFT_DOUBLE_CLICK)
 
-  // Create NASA GIBS WMTS imagery provider using EPSG:3857 Web Mercator (tokenless, free)
-  const gibsMerc = new WebMapTileServiceImageryProvider({
-    url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/default/GoogleMapsCompatible_Level8/{TileMatrix}/{TileRow}/{TileCol}.jpg",
-    layer: "BlueMarble_ShadedRelief_Bathymetry",
-    style: "default",
-    format: "image/jpeg",
-    tileMatrixSetID: "GoogleMapsCompatible_Level8",
+  // Create OpenStreetMap imagery provider for street surface (tokenless, free)
+  const osm = new UrlTemplateImageryProvider({
+    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     tilingScheme: new WebMercatorTilingScheme(),
-    // Web Mercator GIBS may not support zoom level 0; start at 1
-    minimumLevel: 1,
-    maximumLevel: 8,
-    credit: new Credit("NASA GIBS"),
+    maximumLevel: 19,
+    credit: new Credit("© OpenStreetMap contributors"),
   })
 
-  // Add debug logging
-  gibsMerc.errorEvent.addEventListener((e: any) => console.warn("[GIBS3857] tile error", e))
-
-  // GUARANTEE no Ion imagery remains and add ONLY GIBS provider
+  // GUARANTEE no Ion imagery remains and add ONLY OSM provider
   viewer.imageryLayers.removeAll(true)
-  viewer.imageryLayers.addImageryProvider(gibsMerc)
+  viewer.imageryLayers.addImageryProvider(osm)
 
   // Premium atmosphere settings (tokenless)
   viewer.scene.globe.show = true
@@ -101,9 +92,9 @@ export async function createViewer(container: HTMLElement, creditContainer?: HTM
     // Wait for imagery provider to initialize and load initial tiles
     const checkReadiness = () => {
       // Check if provider has loaded at least one tile
-      const gibsReady = (gibsMerc as any)._ready !== false
+      const osmReady = (osm as any)._ready !== false
       
-      if (gibsReady && !imageryReady) {
+      if (osmReady && !imageryReady) {
         imageryReady = true
         console.log('[Cesium] Imagery layer ready')
         

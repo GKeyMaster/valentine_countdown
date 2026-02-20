@@ -4,7 +4,8 @@ import {
   Cartesian3, 
   Math as CesiumMath, 
   HeadingPitchRange,
-  EasingFunction
+  EasingFunction,
+  BoundingSphere
 } from 'cesium'
 import { createViewer } from '../lib/cesium/createViewer'
 import { VenueMarkerManager } from '../lib/cesium/markerUtils'
@@ -20,6 +21,7 @@ interface GlobeProps {
   stops?: Stop[]
   selectedStopId?: string | null
   onSelectStop?: (stopId: string) => void
+  onFlyToOverview?: (flyToOverviewFn: (stops: Stop[]) => void) => void
 }
 
 export function Globe({ 
@@ -28,7 +30,8 @@ export function Globe({
   hideUntilReady = false, 
   stops = [], 
   selectedStopId = null, 
-  onSelectStop 
+  onSelectStop,
+  onFlyToOverview
 }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const creditContainerRef = useRef<HTMLDivElement>(null)
@@ -38,6 +41,8 @@ export function Globe({
   const routeManagerRef = useRef<RouteManager | null>(null)
   const buildingManagerRef = useRef<BuildingManager | null>(null)
   const initOnceRef = useRef(false)
+  const didInitialOverviewRef = useRef(false)
+  const allowFlyToSelectedRef = useRef(false)
   const [isReady, setIsReady] = useState(false)
 
   // Stable callback to avoid recreating the onReady function
@@ -45,6 +50,46 @@ export function Globe({
     console.log('[Cesium] Globe ready for interactions')
     onReady?.(viewer, cameraManager)
   }, [onReady])
+
+  // Pass flyToOverview function to parent
+  useEffect(() => {
+    if (onFlyToOverview) {
+      onFlyToOverview(flyToOverview)
+    }
+  }, [onFlyToOverview, flyToOverview])
+
+  // Overview flight function
+  const flyToOverview = useCallback((stops: Stop[]) => {
+    if (!viewerRef.current || !stops?.length) return
+    const viewer = viewerRef.current
+
+    const pts = stops
+      .filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lng))
+      .map(s => Cartesian3.fromDegrees(s.lng!, s.lat!, 0))
+
+    if (pts.length === 0) return
+
+    const bs = BoundingSphere.fromPoints(pts)
+
+    // Force a sane range (avoid tiny radius causing weird camera)
+    const range = Math.max(bs.radius * 3.5, 1_500_000)
+
+    viewer.camera.flyToBoundingSphere(bs, {
+      duration: 2.2,
+      offset: new HeadingPitchRange(
+        CesiumMath.toRadians(0),
+        CesiumMath.toRadians(-45),
+        range
+      ),
+      easingFunction: EasingFunction.CUBIC_IN_OUT,
+      complete: () => {
+        viewer.scene.requestRender()
+        // allow fly-to-selected after initial overview finishes
+        allowFlyToSelectedRef.current = true
+        console.log('[Globe] Initial overview complete, enabling stop selection')
+      },
+    })
+  }, [])
 
   // Initialize Cesium viewer ONCE
   useEffect(() => {
@@ -181,8 +226,15 @@ export function Globe({
       if (routeManagerRef.current && stops.length > 1) {
         routeManagerRef.current.addTourRoute(stops)
       }
+
+      // Start in Overview on initial load (NOT first stop)
+      if (!didInitialOverviewRef.current) {
+        didInitialOverviewRef.current = true
+        console.log('[Globe] Starting initial overview')
+        flyToOverview(stops)
+      }
     }
-  }, [isReady, stops]) // Run when either viewer becomes ready OR stops data arrives
+  }, [isReady, stops, flyToOverview]) // Run when either viewer becomes ready OR stops data arrives
 
   // Set initial overview position when stops are first loaded
   useEffect(() => {
@@ -204,6 +256,9 @@ export function Globe({
 
   // Fly to selected stop when selection changes (direct viewer.flyTo)
   useEffect(() => {
+    // Do not allow fly-to-selected until initial overview completes
+    if (!allowFlyToSelectedRef.current) return
+    
     if (viewerRef.current && selectedStopId && stops.length > 0 && isReady) {
       const selectedStop = stops.find(stop => stop.id === selectedStopId)
       if (selectedStop && selectedStop.lat && selectedStop.lng) {

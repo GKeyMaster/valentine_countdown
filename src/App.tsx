@@ -22,6 +22,7 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [, setViewer] = useState<Viewer | null>(null)
   const [cameraManager, setCameraManager] = useState<PremiumCameraManager | null>(null)
+  const flyToOverviewRef = useRef<((stops: Stop[]) => void) | null>(null)
   
   // Premium loading state machine
   const [loadingStage, setLoadingStage] = useState<LoadingStage>('boot')
@@ -97,11 +98,11 @@ function App() {
 
   // Overview button handler
   const handleOverviewClick = useCallback(() => {
-    if (cameraManager && stops.length > 0) {
+    if (flyToOverviewRef.current && stops.length > 0) {
       console.log('[App] Overview button clicked')
-      cameraManager.flyToBoundingSphereOverview(stops)
+      flyToOverviewRef.current(stops)
     }
-  }, [cameraManager, stops])
+  }, [stops])
 
   const handleImageryReady = useCallback(() => {
     console.log('[App] Imagery preload completed')
@@ -186,6 +187,7 @@ function App() {
         stops={stops}
         selectedStopId={selectedStopId}
         onSelectStop={handleStopSelection}
+        onFlyToOverview={(fn) => { flyToOverviewRef.current = fn }}
       />
       
       {/* Premium Layout System */}

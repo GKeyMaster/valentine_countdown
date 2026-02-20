@@ -3,7 +3,8 @@ import {
   GeoJsonDataSource,
   Color,
   HeightReference,
-  ColorMaterialProperty,
+  ImageMaterialProperty,
+  Cartesian2,
   ConstantProperty
 } from 'cesium'
 import type { Stop } from '../data/types'
@@ -13,6 +14,46 @@ import type { Stop } from '../data/types'
  */
 
 const MAX_BUILDINGS_PER_STOP = 500 // Limit for performance
+
+// Cache facade texture (create once per page load)
+let facadeTextureDataUrl: string | null = null
+
+/**
+ * Creates a subtle procedural facade texture
+ */
+function makeFacadeTextureDataUrl(): string {
+  if (facadeTextureDataUrl) return facadeTextureDataUrl
+  
+  const c = document.createElement("canvas")
+  c.width = 64
+  c.height = 64
+  const ctx = c.getContext("2d")!
+  
+  // dark base
+  ctx.fillStyle = "#151515"
+  ctx.fillRect(0, 0, 64, 64)
+  
+  // window grid
+  ctx.fillStyle = "rgba(255,255,255,0.06)"
+  for (let y = 6; y < 64; y += 10) {
+    for (let x = 6; x < 64; x += 10) {
+      ctx.fillRect(x, y, 4, 4)
+    }
+  }
+  
+  // subtle noise
+  const img = ctx.getImageData(0, 0, 64, 64)
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() * 12) | 0
+    img.data[i] = img.data[i] + n
+    img.data[i + 1] = img.data[i + 1] + n
+    img.data[i + 2] = img.data[i + 2] + n
+  }
+  ctx.putImageData(img, 0, 0)
+  
+  facadeTextureDataUrl = c.toDataURL("image/png")
+  return facadeTextureDataUrl
+}
 
 /**
  * Calculates building height from OSM properties with proper clamping
@@ -151,10 +192,13 @@ export class BuildingManager {
           entity.polygon.extrudedHeight = new ConstantProperty(height) // Extrude upward
           entity.polygon.heightReference = new ConstantProperty(HeightReference.CLAMP_TO_GROUND)
           
-          // Dark neutral material
-          entity.polygon.material = new ColorMaterialProperty(
-            Color.fromCssColorString("#141414").withAlpha(0.70)
-          )
+          // Apply subtle facade texture material
+          entity.polygon.material = new ImageMaterialProperty({
+            image: makeFacadeTextureDataUrl(),
+            repeat: new Cartesian2(6, 6),
+            color: Color.WHITE.withAlpha(0.85),
+            transparent: true,
+          })
           
           // Set name for debugging
           entity.name = `Building ${index + 1} (${height.toFixed(1)}m)`

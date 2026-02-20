@@ -26,80 +26,53 @@ export function GlobeControls({ viewer }: GlobeControlsProps) {
   if (!viewer) return null
 
   return (
-    <div style={{
-      position: 'absolute',
-      top: '20px',
-      right: '20px',
-      zIndex: 1000,
-      background: 'rgba(0, 0, 0, 0.7)',
-      backdropFilter: 'blur(10px)',
-      borderRadius: '8px',
-      padding: '12px 16px',
-      color: 'white',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      fontSize: '14px',
-      userSelect: 'none',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)'
-    }}>
-      <label style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        cursor: 'pointer'
-      }}>
-        <input
-          type="checkbox"
-          checked={nightLightsEnabled}
-          onChange={toggleNightLights}
-          style={{
-            width: '16px',
-            height: '16px',
-            cursor: 'pointer'
-          }}
-        />
-        <span>🌃 Night Lights</span>
-      </label>
-      
-      {import.meta.env.DEV && (
-        <div style={{
-          marginTop: '8px',
-          paddingTop: '8px',
-          borderTop: '1px solid rgba(255, 255, 255, 0.2)',
-          fontSize: '12px',
-          opacity: 0.8
-        }}>
-          <div style={{ marginBottom: '4px' }}>Debug:</div>
-          <button
-            onClick={() => (window as any).setNightTime?.()}
-            style={{
-              background: 'rgba(255, 255, 255, 0.1)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              color: 'white',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              fontSize: '11px',
-              cursor: 'pointer',
-              marginRight: '4px'
-            }}
-          >
-            🌙 Night
-          </button>
-          <button
-            onClick={() => (window as any).setDayTime?.()}
-            style={{
-              background: 'rgba(255, 255, 255, 0.1)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              color: 'white',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              fontSize: '11px',
-              cursor: 'pointer'
-            }}
-          >
-            ☀️ Day
-          </button>
-        </div>
-      )}
+    <div className="absolute right-0 z-40 p-xl" style={{ top: '120px' }}>
+      <div className="glass-panel px-lg py-md text-sm">
+        <label className="flex items-center gap-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={nightLightsEnabled}
+            onChange={toggleNightLights}
+            className="w-4 h-4 cursor-pointer"
+            style={{ width: '16px', height: '16px' }}
+          />
+          <span className="text-secondary">🌃 Night Lights</span>
+        </label>
+        
+        {import.meta.env.DEV && (
+          <div className="mt-md pt-md text-xs text-muted" style={{
+            borderTop: '1px solid var(--color-glass-border)'
+          }}>
+            <div className="mb-xs">Debug:</div>
+            <div className="flex gap-xs">
+              <button
+                onClick={() => (window as any).setNightTime?.()}
+                className="glass-panel-subtle px-sm py-xs text-xs cursor-pointer hover:text-primary"
+                style={{ 
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: 'var(--radius-sm)',
+                  transition: 'all var(--transition-fast)'
+                }}
+              >
+                🌙 Night
+              </button>
+              <button
+                onClick={() => (window as any).setDayTime?.()}
+                className="glass-panel-subtle px-sm py-xs text-xs cursor-pointer hover:text-primary"
+                style={{ 
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: 'var(--radius-sm)',
+                  transition: 'all var(--transition-fast)'
+                }}
+              >
+                ☀️ Day
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

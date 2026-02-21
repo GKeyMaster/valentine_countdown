@@ -139,16 +139,10 @@ export function Globe({
         // Initialize building manager
         buildingManagerRef.current = new BuildingManager(result.viewer)
 
-        // Initialize auto-rotate controller with first venue anchor so initial view is above Chicago
+        // Initial view: above equator, much further out (not northern side)
         autoRotateControllerRef.current = new AutoRotateController(result.viewer)
-        const currentStops = stopsRef.current
-        const firstStop = currentStops.length > 0
-          ? [...currentStops].sort((a, b) => a.order - b.order)[0]
-          : null
-        const anchor = firstStop && firstStop.lat != null && firstStop.lng != null
-          ? { lon: firstStop.lng, lat: firstStop.lat }
-          : undefined
-        autoRotateControllerRef.current.initialize(anchor)
+        const initialAnchor = { lon: 0, lat: 0 }
+        autoRotateControllerRef.current.initialize(initialAnchor)
 
         // Initialize markers and routes if stops are available
         if (stops.length > 0) {

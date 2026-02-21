@@ -6,14 +6,15 @@ import {
 } from './poses'
 
 /** Distance from Earth center as multiple of radius. Ensures whole sphere visible with spacing (top/bottom). */
-const DISTANCE_MULTIPLIER = 3.2
+const DISTANCE_MULTIPLIER = 5.0
 
 export interface AnchorLonLat {
   lon: number
   lat: number
 }
 
-const DEFAULT_ANCHOR: AnchorLonLat = { lon: 0, lat: 20 }
+/** Initial view: above equator (not northern hemisphere). */
+const DEFAULT_ANCHOR: AnchorLonLat = { lon: 0, lat: 0 }
 
 /**
  * Sets the overview camera so the entire Earth disk is centered in the viewport.

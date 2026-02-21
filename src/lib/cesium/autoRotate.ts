@@ -15,7 +15,7 @@ export function applyOverviewConstraints(viewer: Viewer): void {
   const radius = viewer.scene.globe.ellipsoid.maximumRadius
   const controller = viewer.scene.screenSpaceCameraController
   controller.minimumZoomDistance = radius * 2.2  // whole globe visible
-  controller.maximumZoomDistance = radius * 4.5  // allow zoom out with spacing
+  controller.maximumZoomDistance = radius * 6.0  // allow far zoom out
 }
 
 /**

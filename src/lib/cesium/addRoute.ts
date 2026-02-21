@@ -140,6 +140,15 @@ export class RouteManager {
   }
 
   /**
+   * Toggle route arc visibility (overview = visible, venue = hidden)
+   */
+  setRouteVisible(visible: boolean): void {
+    this.routeEntities.forEach(entity => {
+      entity.show = new ConstantProperty(visible)
+    })
+  }
+
+  /**
    * Routes are always visible - no dynamic visibility updates needed
    */
   updateRouteVisibility(): void {

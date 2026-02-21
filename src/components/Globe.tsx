@@ -5,8 +5,7 @@ import {
   Math as CesiumMath, 
   HeadingPitchRange,
   EasingFunction,
-  BoundingSphere,
-  ConstantProperty
+  BoundingSphere
 } from 'cesium'
 import { createViewer, setMapMode } from '../lib/cesium/createViewer'
 import { VenueMarkerManager, type MarkerHoverInfo } from '../lib/cesium/markerUtils'
@@ -20,6 +19,7 @@ interface GlobeProps {
   onImageryReady?: () => void
   hideUntilReady?: boolean
   stops?: Stop[]
+  viewMode?: 'overview' | 'venue'
   selectedStopId?: string | null
   onSelectStop?: (stopId: string) => void
   onFlyToOverview?: (flyToOverviewFn: (stops: Stop[]) => void) => void
@@ -30,6 +30,7 @@ export function Globe({
   onImageryReady, 
   hideUntilReady = false, 
   stops = [], 
+  viewMode = 'overview',
   selectedStopId = null, 
   onSelectStop,
   onFlyToOverview
@@ -249,31 +250,13 @@ export function Globe({
     }
   }, [onSelectStop])
 
-  // Hide route when zoomed into city view (camera height < 30km)
+  // Route arc visibility: overview = visible, venue = hidden
   useEffect(() => {
-    if (!isReady || !viewerRef.current) return
-    const viewer = viewerRef.current
-    const ellipsoid = viewer.scene.globe.ellipsoid
-    let raf = 0
-    const onCameraChanged = () => {
-      if (raf) return
-      raf = requestAnimationFrame(() => {
-        raf = 0
-        const carto = ellipsoid.cartesianToCartographic(viewer.camera.positionWC)
-        const h = carto.height
-        const show = h > 30_000
-        routeManagerRef.current?.getRouteEntities().forEach((entity) => {
-          ;(entity as { show: unknown }).show = new ConstantProperty(show)
-        })
-        viewer.scene.requestRender()
-      })
+    if (routeManagerRef.current && isReady) {
+      routeManagerRef.current.setRouteVisible(viewMode === 'overview')
+      viewerRef.current?.scene.requestRender()
     }
-    viewer.camera.changed.addEventListener(onCameraChanged)
-    return () => {
-      viewer.camera.changed.removeEventListener(onCameraChanged)
-      if (raf) cancelAnimationFrame(raf)
-    }
-  }, [isReady])
+  }, [viewMode, isReady])
 
   // Fly to selected stop when selection changes (direct viewer.flyTo)
   useEffect(() => {

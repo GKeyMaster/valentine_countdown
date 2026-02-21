@@ -16,8 +16,11 @@ import './styles/tokens.css'
 import './styles/layout.css'
 import './styles/loader.css'
 
+export type ViewMode = 'overview' | 'venue'
+
 function App() {
   const [stops, setStops] = useState<Stop[]>([])
+  const [viewMode, setViewMode] = useState<ViewMode>('overview')
   const [selectedStopId, setSelectedStopId] = useState<string | null>(null)
   const [scenario, setScenario] = useState<Scenario>('base')
   const [error, setError] = useState<string | null>(null)
@@ -80,20 +83,24 @@ function App() {
 
   const selectedStop = stops.find(stop => stop.id === selectedStopId) || null
 
-  // Enhanced stop selection with camera motion
+  // Selecting a venue: enter venue mode and set selection
   const handleStopSelection = useCallback((stopId: string) => {
     const stop = stops.find(s => s.id === stopId)
-    if (stop && cameraManager) {
+    if (stop) {
       console.log(`[App] Selecting stop: ${stop.city} - ${stop.venue}`)
       setSelectedStopId(stopId)
+      setViewMode('venue')
       // Camera will fly via the useEffect in Globe.tsx
     } else {
       setSelectedStopId(stopId)
+      setViewMode('venue')
     }
-  }, [stops, cameraManager])
+  }, [stops])
 
-  // Overview button handler
+  // Overview button: enter overview mode and deselect
   const handleOverviewClick = useCallback(() => {
+    setViewMode('overview')
+    setSelectedStopId(null)
     if (flyToOverviewRef.current && stops.length > 0) {
       console.log('[App] Overview button clicked')
       flyToOverviewRef.current(stops)
@@ -192,6 +199,7 @@ function App() {
         onImageryReady={handleImageryReady}
         hideUntilReady={showLoader}
         stops={stops}
+        viewMode={viewMode}
         selectedStopId={selectedStopId}
         onSelectStop={handleStopSelection}
         onFlyToOverview={(fn) => { flyToOverviewRef.current = fn }}

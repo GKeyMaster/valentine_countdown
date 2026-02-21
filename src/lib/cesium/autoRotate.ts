@@ -1,20 +1,21 @@
 import { Viewer, Cartesian3 } from 'cesium'
-import { setOverviewCameraCentered } from './camera/overview'
+import { setOverviewCameraCentered, type AnchorLonLat } from './camera/overview'
 
 /**
  * Sets the camera to show the entire Earth centered in the viewport.
  */
-export function setOverviewCamera(viewer: Viewer): void {
-  setOverviewCameraCentered(viewer)
+export function setOverviewCamera(viewer: Viewer, anchor?: AnchorLonLat): void {
+  setOverviewCameraCentered(viewer, anchor)
 }
 
 /**
  * Applies overview zoom constraints so the camera stays at whole-globe framing.
  */
 export function applyOverviewConstraints(viewer: Viewer): void {
+  const radius = viewer.scene.globe.ellipsoid.maximumRadius
   const controller = viewer.scene.screenSpaceCameraController
-  controller.minimumZoomDistance = 20_000_000
-  controller.maximumZoomDistance = 40_000_000
+  controller.minimumZoomDistance = radius * 2.2  // whole globe visible
+  controller.maximumZoomDistance = radius * 3.2  // allow slight zoom out with spacing
 }
 
 /**
@@ -85,9 +86,10 @@ export class AutoRotateController {
 
   /**
    * Set initial state: overview camera, constraints, and start auto-rotate + listeners.
+   * @param anchor - Optional anchor (first venue lon/lat) to start rotation above.
    */
-  initialize(): void {
-    setOverviewCamera(this.viewer)
+  initialize(anchor?: AnchorLonLat): void {
+    setOverviewCamera(this.viewer, anchor)
     applyOverviewConstraints(this.viewer)
     this.autoRotateEnabled = true
     this.attachInteractionListeners()
@@ -161,11 +163,12 @@ export class AutoRotateController {
   }
 
   /**
-   * Call when switching to overview (e.g. Overview button) - sets camera and enables auto-rotate.
+   * Call when switching to overview - sets camera and enables auto-rotate.
+   * @param anchor - Anchor to position above (first venue lon/lat for rotation start).
    */
-  flyToOverview(): void {
+  flyToOverview(anchor?: AnchorLonLat): void {
     this.onFlightStart()
-    setOverviewCamera(this.viewer)
+    setOverviewCamera(this.viewer, anchor)
     applyOverviewConstraints(this.viewer)
     this.autoRotateEnabled = true
     this.startPreRender()

@@ -57,8 +57,8 @@ export function Globe({
     onReady?.(viewer, cameraManager)
   }, [onReady])
 
-  // Overview: whole Earth, auto-rotate, overview constraints
-  const flyToOverview = useCallback((_stops: Stop[]) => {
+  // Overview: whole Earth above first venue, auto-rotate, overview constraints
+  const flyToOverview = useCallback((stops: Stop[]) => {
     if (!viewerRef.current || !gibsLayerRef.current || !osmLayerRef.current) return
     const viewer = viewerRef.current
     const gibsLayer = gibsLayerRef.current
@@ -68,7 +68,12 @@ export function Globe({
       routeEntities: routeManagerRef.current?.getRouteEntities() ?? undefined
     })
 
-    autoRotateControllerRef.current?.flyToOverview()
+    const firstStop = [...stops].sort((a, b) => a.order - b.order)[0]
+    const anchor = firstStop && firstStop.lat != null && firstStop.lng != null
+      ? { lon: firstStop.lng, lat: firstStop.lat }
+      : undefined
+
+    autoRotateControllerRef.current?.flyToOverview(anchor)
     allowFlyToSelectedRef.current = true
     console.log('[Globe] Overview: whole Earth, auto-rotate active')
   }, [])

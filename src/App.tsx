@@ -214,9 +214,6 @@ function App() {
           transition: 'opacity 650ms cubic-bezier(0.23, 1, 0.32, 1), transform 650ms cubic-bezier(0.23, 1, 0.32, 1)'
         }}
       >
-        {/* Main area: pass-through so globe receives clicks for pan/zoom and markers */}
-        <div className="layout-main" aria-hidden />
-        
         {/* Header */}
         <div className="layout-header">
           <HeaderBar 

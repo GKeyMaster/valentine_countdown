@@ -1,10 +1,10 @@
 /* Premium Layout System */
 
-/* Root Layout Container - capture pointer so panels block globe; main area passes through */
+/* Root Layout Container - pointer-events: none so clicks pass through to globe in main area */
 .app-layout {
   position: absolute;
   inset: 0;
-  pointer-events: auto;
+  pointer-events: none;
   display: grid;
   grid-template-columns: var(--rail-left-width) 1fr var(--rail-right-width);
   grid-template-rows: var(--header-height) 1fr auto;
@@ -194,7 +194,6 @@
   display: none;
 }
 
-/* Main area: pass pointer events through to globe so pan/zoom and marker clicks work */
 .layout-main {
   grid-area: main;
   pointer-events: none;

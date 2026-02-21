@@ -128,7 +128,7 @@ export function createVenueMarker(stop: Stop, isSelected = false): Entity {
       height: canvas.style.height ? parseInt(canvas.style.height) : canvas.height,
       verticalOrigin: VerticalOrigin.BOTTOM,
       horizontalOrigin: HorizontalOrigin.CENTER,
-      disableDepthTestDistance: Number.POSITIVE_INFINITY, // Always visible
+      disableDepthTestDistance: 0, // Respect depth - hide when on far side of globe
       scale: 1.0,
       pixelOffset: new Cartesian3(0, -8, 0) // Slight offset for better positioning
     },

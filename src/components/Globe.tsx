@@ -139,9 +139,9 @@ export function Globe({
         // Initialize building manager
         buildingManagerRef.current = new BuildingManager(result.viewer)
 
-        // Initial view: from southern side (above equator), not northern hemisphere
+        // Initial view: from southern side (not northern hemisphere)
         autoRotateControllerRef.current = new AutoRotateController(result.viewer)
-        const initialAnchor = { lon: 0, lat: -60 }
+        const initialAnchor = { lon: 0, lat: -80 }
         autoRotateControllerRef.current.initialize(initialAnchor)
 
         // Initialize markers and routes if stops are available
@@ -233,11 +233,11 @@ export function Globe({
         viewerRef.current?.scene.requestRender()
       }
 
-      // Start in Overview on initial load (NOT first stop)
+      // Initial load: keep southern perspective set by initialize(); don't overwrite with flyToOverview
       if (!didInitialOverviewRef.current) {
         didInitialOverviewRef.current = true
-        console.log('[Globe] Starting initial overview')
-        flyToOverview(stops)
+        allowFlyToSelectedRef.current = true
+        console.log('[Globe] Initial overview (southern perspective)')
       }
     }
   }, [isReady, stops, flyToOverview, viewMode]) // Run when either viewer becomes ready OR stops data arrives

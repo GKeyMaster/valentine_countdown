@@ -5,8 +5,8 @@ import {
   applyPose,
 } from './poses'
 
-/** Distance from Earth center as multiple of radius. Ensures whole sphere visible with spacing (top/bottom). */
-const DISTANCE_MULTIPLIER = 5.0
+/** Distance from Earth center as multiple of radius. Same for initial load and fly-out. */
+export const OVERVIEW_DISTANCE_MULTIPLIER = 5.0
 
 export interface AnchorLonLat {
   lon: number
@@ -25,7 +25,7 @@ export function setOverviewCameraCentered(
   anchorLonLat?: AnchorLonLat
 ): void {
   const radius = getEarthRadius(viewer)
-  const distanceFromCenter = radius * DISTANCE_MULTIPLIER
+  const distanceFromCenter = radius * OVERVIEW_DISTANCE_MULTIPLIER
   const anchor = anchorLonLat ?? DEFAULT_ANCHOR
   const ellipsoid = viewer.scene.globe.ellipsoid
   const pose = computeEarthCenteredPoseAboveLatLng(

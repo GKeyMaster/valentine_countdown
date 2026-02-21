@@ -12,6 +12,7 @@ import { PremiumCameraManager } from '../lib/cesium/cameraUtils'
 import { RouteManager } from '../lib/cesium/addRoute'
 import { BuildingManager } from '../lib/cesium/buildingUtils'
 import { AutoRotateController, setOverviewCamera, removeOverviewConstraints, applyOverviewConstraints } from '../lib/cesium/autoRotate'
+import { OVERVIEW_DISTANCE_MULTIPLIER } from '../lib/cesium/camera/overview'
 import { getEarthRadius, computeEarthCenteredPoseAboveLatLng } from '../lib/cesium/camera/poses'
 import type { Stop } from '../lib/data/types'
 
@@ -98,7 +99,7 @@ export function Globe({
     applyOverviewConstraints(viewer)
 
     const radius = getEarthRadius(viewer)
-    const distanceFromCenter = radius * 2.4
+    const distanceFromCenter = radius * OVERVIEW_DISTANCE_MULTIPLIER
     const ellipsoid = viewer.scene.globe.ellipsoid
     const pose = computeEarthCenteredPoseAboveLatLng(stop.lng, stop.lat, distanceFromCenter, ellipsoid)
 
@@ -181,9 +182,15 @@ export function Globe({
         // Initialize building manager
         buildingManagerRef.current = new BuildingManager(result.viewer)
 
-        // Initial view: above equator (side view)
+        // Initial view: above first venue, marker at center (same perspective as fly-out)
         autoRotateControllerRef.current = new AutoRotateController(result.viewer)
-        const initialAnchor = { lon: 0, lat: 0 }
+        const currentStops = stopsRef.current
+        const firstStop = currentStops.length > 0
+          ? [...currentStops].sort((a, b) => a.order - b.order)[0]
+          : null
+        const initialAnchor = firstStop && firstStop.lat != null && firstStop.lng != null
+          ? { lon: firstStop.lng, lat: firstStop.lat }
+          : { lon: 0, lat: 0 }
         autoRotateControllerRef.current.initialize(initialAnchor)
 
         // Initialize markers and routes if stops are available

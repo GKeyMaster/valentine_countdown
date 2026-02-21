@@ -6,7 +6,7 @@ import {
 } from './poses'
 
 /** Distance from Earth center as multiple of radius. Ensures whole sphere visible with spacing (top/bottom). */
-const DISTANCE_MULTIPLIER = 2.7
+const DISTANCE_MULTIPLIER = 3.2
 
 export interface AnchorLonLat {
   lon: number

@@ -13,8 +13,8 @@ export interface AnchorLonLat {
   lat: number
 }
 
-/** Initial view: above equator (not northern hemisphere). */
-const DEFAULT_ANCHOR: AnchorLonLat = { lon: 0, lat: 0 }
+/** Initial view: from southern side, above equator (not northern hemisphere). */
+const DEFAULT_ANCHOR: AnchorLonLat = { lon: 0, lat: -60 }
 
 /**
  * Sets the overview camera so the entire Earth disk is centered in the viewport.

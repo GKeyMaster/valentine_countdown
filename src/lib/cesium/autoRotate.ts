@@ -1,19 +1,11 @@
-import { Viewer, Cartesian3, Math as CesiumMath } from 'cesium'
+import { Viewer, Cartesian3 } from 'cesium'
+import { setOverviewCameraCentered } from './camera/overview'
 
 /**
- * Sets the camera to show the entire Earth (whole sphere visible with margin).
+ * Sets the camera to show the entire Earth centered in the viewport.
  */
 export function setOverviewCamera(viewer: Viewer): void {
-  const destination = Cartesian3.fromDegrees(10, 20, 30_000_000)
-  const pitch = -CesiumMath.PI_OVER_TWO + 0.35
-  viewer.camera.setView({
-    destination,
-    orientation: {
-      heading: 0,
-      pitch,
-      roll: 0
-    }
-  })
+  setOverviewCameraCentered(viewer)
 }
 
 /**

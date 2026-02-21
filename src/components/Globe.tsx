@@ -132,7 +132,7 @@ export function Globe({
         // Initialize building manager
         buildingManagerRef.current = new BuildingManager(result.viewer)
 
-        // Initialize auto-rotate controller (whole Earth + rotation when overview)
+        // Initialize auto-rotate controller (sets centered whole Earth, then starts rotation)
         autoRotateControllerRef.current = new AutoRotateController(result.viewer)
         autoRotateControllerRef.current.initialize()
 

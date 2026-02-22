@@ -26,6 +26,7 @@ interface GlobeProps {
   onSelectStop?: (stopId: string) => void
   onFlyToOverview?: (flyToOverviewFn: (stops: Stop[]) => void) => void
   onFlyToOverviewAboveStop?: (flyToOverviewAboveStopFn: (stop: Stop) => Promise<void>) => void
+  onVenueFlightComplete?: () => void
 }
 
 export function Globe({ 
@@ -37,7 +38,8 @@ export function Globe({
   selectedStopId = null, 
   onSelectStop,
   onFlyToOverview,
-  onFlyToOverviewAboveStop
+  onFlyToOverviewAboveStop,
+  onVenueFlightComplete
 }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const creditContainerRef = useRef<HTMLDivElement>(null)
@@ -349,6 +351,7 @@ export function Globe({
 
     const onFlightComplete = () => {
       autoRotateControllerRef.current?.onFlightEnd()
+      onVenueFlightComplete?.()
     }
 
     const markerEntity = markerManagerRef.current?.getMarkerEntity?.(selectedStopId)
@@ -365,7 +368,7 @@ export function Globe({
         cancel: onFlightComplete,
       })
     }
-  }, [selectedStopId, stops, isReady])
+  }, [selectedStopId, stops, isReady, onVenueFlightComplete])
 
   // Load buildings when a stop is selected (fire-and-forget, never blocks camera)
   useEffect(() => {

@@ -15,6 +15,7 @@ import { RouteManager } from '../lib/cesium/addRoute'
 import { BuildingManager } from '../lib/cesium/buildingUtils'
 import { AutoRotateController, setOverviewCamera, removeOverviewConstraints, applyOverviewConstraints } from '../lib/cesium/autoRotate'
 import { applyVenueCameraLock, removeVenueCameraLock } from '../lib/cesium/venueCameraLock'
+import { applyVenueFog } from '../lib/cesium/venueFog'
 import { applyCameraConstraints, setupZoomClampListener } from '../lib/cesium/cameraConstraints'
 import { OVERVIEW_DISTANCE_MULTIPLIER } from '../lib/cesium/camera/overview'
 import { getEarthRadius, computeEarthCenteredPoseAboveLatLng } from '../lib/cesium/camera/poses'
@@ -333,6 +334,14 @@ export function Globe({
     }
   }, [viewMode, isReady])
 
+  // Venue fog: enabled in venue mode (atmospheric depth), disabled in overview
+  useEffect(() => {
+    if (viewerRef.current && isReady) {
+      applyVenueFog(viewerRef.current, viewMode)
+      viewerRef.current.scene.requestRender()
+    }
+  }, [viewMode, isReady])
+
   // Fly to selected stop when selection changes (direct viewer.flyTo)
   useEffect(() => {
     if (!allowFlyToSelectedRef.current) return
@@ -481,6 +490,20 @@ export function Globe({
           <div className="marker-tooltip__venue">{tooltip.venue}</div>
         </div>
       )}
+
+      {/* Venue vignette - subtle edge darkening (venue mode only) */}
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+          zIndex: 1,
+          opacity: viewMode === 'venue' ? 1 : 0,
+          transition: 'opacity 0.2s ease-out',
+          background: 'radial-gradient(ellipse 75% 75% at 50% 50%, transparent 45%, rgba(0,0,0,0.12) 100%)',
+        }}
+      />
 
       {/* Cesium Container - ALWAYS rendered, never conditional */}
       <div 

@@ -139,7 +139,7 @@ export async function createViewer(container: HTMLElement, creditContainer?: HTM
 
   // Premium atmosphere settings (tokenless)
   viewer.scene.globe.show = true
-  viewer.scene.fog.enabled = true
+  viewer.scene.fog.enabled = false
   viewer.scene.globe.showGroundAtmosphere = true
 
   // Premium globe visual settings

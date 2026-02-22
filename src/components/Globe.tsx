@@ -275,7 +275,7 @@ export function Globe({
 
   // Initialize markers and routes when both viewer is ready and stops are available
   useEffect(() => {
-    if (isReady && stops.length > 0) {
+    if (isReady && stops.length > 0 && viewerRef.current && gibsLayerRef.current && osmLayerRef.current) {
       console.log('[Globe] Viewer and stops ready - initializing markers and routes')
       
       // Initialize markers
@@ -287,13 +287,18 @@ export function Globe({
       if (routeManagerRef.current && stops.length > 1) {
         routeManagerRef.current.addTourRoute(stops)
         routeManagerRef.current.setRouteVisible(viewMode === 'overview')
-        viewerRef.current?.scene.requestRender()
+        viewerRef.current.scene.requestRender()
       }
 
-      // Initial load: keep southern perspective set by initialize(); don't overwrite with flyToOverview
+      // Initial load: establish overview state (imagery + route visibility)
       if (!didInitialOverviewRef.current) {
         didInitialOverviewRef.current = true
         allowFlyToSelectedRef.current = true
+        setMapMode('overview', viewerRef.current, gibsLayerRef.current, osmLayerRef.current, {
+          routeEntities: routeManagerRef.current?.getRouteEntities() ?? undefined
+        })
+        routeManagerRef.current?.setRouteVisible(true)
+        viewerRef.current.scene.requestRender()
         console.log('[Globe] Initial overview (southern perspective)')
       }
     }

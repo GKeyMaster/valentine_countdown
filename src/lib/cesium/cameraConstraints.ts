@@ -8,7 +8,7 @@ export const VENUE_MAX_ZOOM = 1000
 
 /** Default venue view: distance (m), pitch (degrees, negative = looking down) */
 export const VENUE_DEFAULT_DISTANCE = 1000
-export const VENUE_DEFAULT_PITCH_DEG = -40
+export const VENUE_DEFAULT_PITCH_DEG = -35
 const OVERVIEW_MIN_ZOOM = 2_000_000
 const OVERVIEW_MAX_ZOOM = 30_000_000
 

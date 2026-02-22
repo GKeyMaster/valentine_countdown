@@ -1,5 +1,5 @@
 import type { Viewer } from 'cesium'
-import { PostProcessStage } from 'cesium'
+import { PostProcessStage, Cartesian3 } from 'cesium'
 
 const FOG_FRAGMENT_SHADER = `
 uniform sampler2D colorTexture;
@@ -50,7 +50,7 @@ export function enableVenueFog(viewer: Viewer, opts: VenueFogOptions = {}): void
   const start = opts.start ?? 800.0
   const density = opts.density ?? 0.0012
   const raw = opts.fogColor ?? [0.72, 0.78, 0.82]
-  const fogColor = [raw[0] * 0.85, raw[1] * 0.85, raw[2] * 0.85] as [number, number, number]
+  const fogColor = new Cartesian3(raw[0] * 0.85, raw[1] * 0.85, raw[2] * 0.85)
 
   fogStage = viewer.scene.postProcessStages.add(
     new PostProcessStage({

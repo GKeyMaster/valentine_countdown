@@ -59,7 +59,11 @@ export function Globe({
   const didInitialOverviewRef = useRef(false)
   const allowFlyToSelectedRef = useRef(false)
   const stopsRef = useRef<Stop[]>([])
+  const viewModeRef = useRef<'overview' | 'venue'>(viewMode)
+  const selectedStopIdRef = useRef<string | null>(selectedStopId)
   stopsRef.current = stops
+  viewModeRef.current = viewMode
+  selectedStopIdRef.current = selectedStopId
   const [isReady, setIsReady] = useState(false)
   const [tooltip, setTooltip] = useState<MarkerHoverInfo>(null)
 
@@ -420,31 +424,26 @@ export function Globe({
     }
   }, [selectedStopId, stops, isReady])
 
-  // Load buildings when a stop is selected (fire-and-forget, never blocks camera)
+  // Load buildings only in VENUE mode (textured buildings)
   useEffect(() => {
-    if (buildingManagerRef.current && selectedStopId && stops.length > 0 && isReady) {
+    if (!buildingManagerRef.current || !isReady) return
+
+    if (viewMode === 'venue' && selectedStopId && stops.length > 0) {
       const selectedStop = stops.find(stop => stop.id === selectedStopId)
       if (selectedStop) {
         console.log(`[Globe] Loading buildings for selected stop: ${selectedStop.city}`)
-        // Fire-and-forget: never await, never block camera motion
-        void buildingManagerRef.current.loadBuildingsForStop(selectedStop).catch(error => {
-          console.warn(`[Buildings] Failed to load for ${selectedStop.city}:`, error)
-        })
+        const check = () => viewModeRef.current === 'venue' && selectedStopIdRef.current === selectedStop.id
+        void buildingManagerRef.current
+          .loadBuildingsForStop(selectedStop, check)
+          .catch(error => {
+            console.warn(`[Buildings] Failed to load for ${selectedStop.city}:`, error)
+          })
       }
+    } else {
+      // Overview: clear buildings
+      void buildingManagerRef.current.clearAllBuildings()
     }
-  }, [selectedStopId, stops, isReady])
-
-  // Load buildings for all stops on initial load (optional - for overview)
-  useEffect(() => {
-    if (buildingManagerRef.current && stops.length > 0 && isReady) {
-      console.log('[Globe] Pre-loading buildings for all stops')
-      stops.forEach(stop => {
-        buildingManagerRef.current?.loadBuildingsForStop(stop).catch(error => {
-          console.warn(`[Globe] Failed to pre-load buildings for ${stop.city}:`, error)
-        })
-      })
-    }
-  }, [stops, isReady])
+  }, [viewMode, selectedStopId, stops, isReady])
 
   return (
     <>

@@ -1,89 +1,77 @@
 import {
   Viewer,
-  GeoJsonDataSource,
-  Color,
-  ImageMaterialProperty,
-  Cartesian2,
-  ConstantProperty
+  Entity,
+  Cartesian3,
+  PolygonHierarchy,
+  ConstantProperty,
+  Ellipsoid,
 } from 'cesium'
 import type { Stop } from '../data/types'
+import { stableHash, getFacadeMaterial, getRoofMaterial } from './buildingTextures'
 
-/**
- * Manages 3D building visualization for venues
- */
-
-const MAX_BUILDINGS_PER_STOP = 500 // Limit for performance
-
-// Cache facade texture (create once per page load)
-let facadeTextureDataUrl: string | null = null
-
-/**
- * Creates a subtle procedural facade texture
- */
-function makeFacadeTextureDataUrl(): string {
-  if (facadeTextureDataUrl) return facadeTextureDataUrl
-
-  const c = document.createElement('canvas')
-  c.width = 64
-  c.height = 64
-  const ctx = c.getContext('2d')!
-  // Dark base
-  ctx.fillStyle = '#1a1a1a'
-  ctx.fillRect(0, 0, 64, 64)
-  // Window grid (visible facade pattern)
-  ctx.fillStyle = 'rgba(255,255,255,0.12)'
-  for (let y = 6; y < 64; y += 10) {
-    for (let x = 6; x < 64; x += 10) {
-      ctx.fillRect(x, y, 4, 4)
-    }
-  }
-  // Subtle noise
-  const img = ctx.getImageData(0, 0, 64, 64)
-  for (let i = 0; i < img.data.length; i += 4) {
-    const n = (Math.random() * 12) | 0
-    img.data[i] = Math.min(255, img.data[i] + n)
-    img.data[i + 1] = Math.min(255, img.data[i + 1] + n)
-    img.data[i + 2] = Math.min(255, img.data[i + 2] + n)
-  }
-  ctx.putImageData(img, 0, 0)
-
-  facadeTextureDataUrl = c.toDataURL('image/png')
-  return facadeTextureDataUrl
-}
+const MAX_BUILDINGS_PER_STOP = 500
+const DEBUG_BUILDINGS = true
 
 /**
  * Calculates building height from OSM properties with proper clamping
  */
-function calculateBuildingHeight(properties: any): number {
-  // Check for explicit height in meters
+function calculateBuildingHeight(properties: Record<string, unknown> | undefined): number {
+  if (!properties) return 12 + (Math.random() * 48)
+
   if (properties.height) {
     const heightStr = String(properties.height).toLowerCase()
     const heightMatch = heightStr.match(/(\d+(?:\.\d+)?)/)
     if (heightMatch) {
       const height = parseFloat(heightMatch[1])
-      return Math.max(8, Math.min(220, height)) // Clamp 8..220
+      return Math.max(8, Math.min(220, height))
     }
   }
-  
-  // Check for building levels
+
   if (properties['building:levels']) {
     const levels = parseInt(String(properties['building:levels']), 10)
     if (!isNaN(levels) && levels > 0) {
-      const height = levels * 3.2 // Assume 3.2m per floor
-      return Math.max(8, Math.min(160, height)) // Clamp 8..160
+      const height = levels * 3.2
+      return Math.max(8, Math.min(160, height))
     }
   }
-  
-  // Fallback random height (prototype ok)
-  return 12 + Math.random() * 48 // 12-60m
+
+  return 12 + Math.random() * 48
+}
+
+type GeoJSONFeature = {
+  type: 'Feature'
+  geometry?: {
+    type: 'Polygon'
+    coordinates: number[][][]
+  }
+  properties?: Record<string, unknown>
+}
+
+type GeoJSONFC = {
+  type: 'FeatureCollection'
+  features: GeoJSONFeature[]
 }
 
 /**
- * Building manager for loading and displaying 3D buildings around venues
+ * Converts GeoJSON ring [[lon,lat],...] to Cartesian3[] at ground level
+ */
+function ringToCartesian(ring: number[][], ellipsoid: Ellipsoid = Ellipsoid.WGS84): Cartesian3[] {
+  const positions: Cartesian3[] = []
+  for (let i = 0; i < ring.length; i++) {
+    const [lon, lat] = ring[i]
+    const h = ring[i].length > 2 ? ring[i][2] : 0
+    positions.push(Cartesian3.fromDegrees(lon, lat, h))
+  }
+  return positions
+}
+
+/**
+ * Building manager for loading and displaying 3D buildings with photo textures.
+ * Uses WallGraphics for facades and PolygonGraphics for roofs (separate materials).
  */
 export class BuildingManager {
   private viewer: Viewer
-  private dataSources: Map<string, GeoJsonDataSource> = new Map()
+  private entitiesByStop: Map<string, Entity[]> = new Map()
   private loadingPromises: Map<string, Promise<void>> = new Map()
 
   constructor(viewer: Viewer) {
@@ -91,29 +79,31 @@ export class BuildingManager {
   }
 
   /**
-   * Loads and displays buildings for a specific stop
+   * Loads and displays buildings for a stop. Uses walls + roofs with photo textures.
+   * Only intended for venue mode.
+   * @param isStillRelevant - Optional predicate; if false when load completes, entities are not added
    */
-  async loadBuildingsForStop(stop: Stop): Promise<void> {
+  async loadBuildingsForStop(
+    stop: Stop,
+    isStillRelevant?: () => boolean
+  ): Promise<void> {
     const stopId = stop.id
-    
-    // Remove previously loaded buildings for other stops (cleanup)
-    for (const [prevStopId, dataSource] of this.dataSources.entries()) {
+
+    // Remove previously loaded buildings for other stops
+    for (const [prevStopId, entities] of this.entitiesByStop.entries()) {
       if (prevStopId !== stopId) {
-        await this.viewer.dataSources.remove(dataSource, true)
-        this.dataSources.delete(prevStopId)
+        entities.forEach(e => this.viewer.entities.remove(e))
+        this.entitiesByStop.delete(prevStopId)
       }
     }
-    
-    // Check if already loaded or loading
-    if (this.dataSources.has(stopId) || this.loadingPromises.has(stopId)) {
-      return this.loadingPromises.get(stopId) || Promise.resolve()
+
+    if (this.entitiesByStop.has(stopId) || this.loadingPromises.has(stopId)) {
+      return this.loadingPromises.get(stopId) ?? Promise.resolve()
     }
-    
-    console.log(`[Buildings] Loading buildings for ${stop.city}`)
-    
-    const loadingPromise = this.loadBuildingsInternal(stop)
+
+    const loadingPromise = this.loadBuildingsInternal(stop, isStillRelevant)
     this.loadingPromises.set(stopId, loadingPromise)
-    
+
     try {
       await loadingPromise
     } finally {
@@ -121,136 +111,115 @@ export class BuildingManager {
     }
   }
 
-  /**
-   * Internal method to load buildings
-   */
-  private async loadBuildingsInternal(stop: Stop): Promise<void> {
+  private async loadBuildingsInternal(
+    stop: Stop,
+    isStillRelevant?: () => boolean
+  ): Promise<void> {
     const stopId = stop.id
     const buildingUrl = `/data/buildings/${stopId}.geojson`
-    
+    const ellipsoid = this.viewer.scene.globe.ellipsoid
+
     try {
-      // Load GeoJSON data with extrusion support and no default styling
-      const dataSource = await GeoJsonDataSource.load(buildingUrl, {
-        clampToGround: false,
-        stroke: Color.TRANSPARENT,
-        fill: Color.TRANSPARENT,
-        strokeWidth: 0,
-      })
-      
-      console.log(`[Buildings] Loaded ${dataSource.entities.values.length} buildings for ${stop.city}`)
-      
-      // Limit number of buildings for performance
-      const entities = dataSource.entities.values
-      const buildingsToShow = entities.slice(0, MAX_BUILDINGS_PER_STOP)
-      
-      if (entities.length > MAX_BUILDINGS_PER_STOP) {
-        console.log(`[Buildings] Limiting to first ${MAX_BUILDINGS_PER_STOP} buildings for performance`)
-        
-        // Remove excess entities
-        for (let i = MAX_BUILDINGS_PER_STOP; i < entities.length; i++) {
-          dataSource.entities.remove(entities[i])
-        }
+      const response = await fetch(buildingUrl)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
       }
-      
-      // Configure 3D extrusion for each building
-      dataSource.entities.values.forEach((entity, index) => {
-        // Remove yellow outlines from polylines
-        if (entity.polyline) {
-          entity.polyline.show = new ConstantProperty(false)
-        }
 
-        if (entity.polygon) {
-          const properties = entity.properties?.getValue(this.viewer.clock.currentTime) || {}
-          const height = calculateBuildingHeight(properties)
+      const data: GeoJSONFC = await response.json()
+      const features = Array.isArray(data.features) ? data.features : []
 
-          entity.polygon.outline = new ConstantProperty(false)
-          entity.polygon.height = new ConstantProperty(0)
-          entity.polygon.extrudedHeight = new ConstantProperty(height)
+      const entities: Entity[] = []
+      let wallCount = 0
+      let roofCount = 0
 
-          // Per-building tint variation (premium look)
-          const tint = 0.85 + Math.random() * 0.12
-          const r = Math.floor(255 * tint)
-          const g = Math.floor(255 * tint)
-          const b = Math.floor(255 * tint * 0.95)
+      const buildingsToProcess = features.slice(0, MAX_BUILDINGS_PER_STOP)
 
-          entity.polygon.material = new ImageMaterialProperty({
-            image: makeFacadeTextureDataUrl(),
-            repeat: new Cartesian2(6, 6),
-            color: Color.fromBytes(r, g, b, 230),
-            transparent: true,
-          })
+      for (let i = 0; i < buildingsToProcess.length; i++) {
+        const feature = buildingsToProcess[i]
+        if (!feature.geometry || feature.geometry.type !== 'Polygon') continue
 
-          entity.name = `Building ${index + 1} (${height.toFixed(1)}m)`
-        }
-      })
-      
-      // Now remove excess entities after styling
-      if (dataSource.entities.values.length > MAX_BUILDINGS_PER_STOP) {
-        console.log(`[Buildings] Limiting to first ${MAX_BUILDINGS_PER_STOP} buildings for performance`)
-        
-        const entities = dataSource.entities.values
-        for (let i = MAX_BUILDINGS_PER_STOP; i < entities.length; i++) {
-          dataSource.entities.remove(entities[i])
-        }
+        const coords = feature.geometry.coordinates
+        if (!coords?.[0] || coords[0].length < 3) continue
+
+        const ring = coords[0]
+        const height = calculateBuildingHeight(feature.properties)
+        const hash = stableHash(`${stopId}-${i}`)
+
+        const positions = ringToCartesian(ring, ellipsoid)
+        const minHeights = positions.map(() => 0)
+        const maxHeights = positions.map(() => height)
+
+        // 1) Wall entity
+        const wallEntity = this.viewer.entities.add({
+          name: `building-wall-${stopId}-${i}`,
+          wall: {
+            positions: new ConstantProperty(positions),
+            minimumHeights: new ConstantProperty(minHeights),
+            maximumHeights: new ConstantProperty(maxHeights),
+            material: getFacadeMaterial(hash),
+            outline: false,
+          },
+        })
+        entities.push(wallEntity)
+        wallCount++
+
+        // 2) Roof polygon entity
+        const roofEntity = this.viewer.entities.add({
+          name: `building-roof-${stopId}-${i}`,
+          polygon: {
+            hierarchy: new ConstantProperty(new PolygonHierarchy(positions)),
+            height: new ConstantProperty(height),
+            extrudedHeight: new ConstantProperty(height + 0.5),
+            material: getRoofMaterial(hash),
+            outline: false,
+          },
+        })
+        entities.push(roofEntity)
+        roofCount++
       }
-      
-      // Add to viewer
-      await this.viewer.dataSources.add(dataSource)
-      this.dataSources.set(stopId, dataSource)
-      
-      const finalCount = Math.min(dataSource.entities.values.length, MAX_BUILDINGS_PER_STOP)
-      console.log(`[Buildings] Configured ${finalCount} 3D buildings for ${stop.city}`)
-      
+
+      if (isStillRelevant && !isStillRelevant()) {
+        entities.forEach(e => this.viewer.entities.remove(e))
+        return
+      }
+
+      this.entitiesByStop.set(stopId, entities)
+
+      if (DEBUG_BUILDINGS) {
+        const total = wallCount + roofCount
+        console.log(`[Buildings] Loaded: ${wallCount} walls, ${roofCount} roofs (total entities: ${total}) for ${stop.city}`)
+      }
     } catch (error) {
-      console.warn(`[Buildings] Failed to load buildings for ${stop.city}:`, error)
-      // Don't throw - buildings are optional enhancement
+      console.warn(`[Buildings] Failed to load for ${stop.city}:`, error)
     }
   }
 
-  /**
-   * Removes buildings for a specific stop
-   */
   async removeBuildingsForStop(stopId: string): Promise<void> {
-    const dataSource = this.dataSources.get(stopId)
-    if (dataSource) {
-      await this.viewer.dataSources.remove(dataSource)
-      this.dataSources.delete(stopId)
+    const entities = this.entitiesByStop.get(stopId)
+    if (entities) {
+      entities.forEach(e => this.viewer.entities.remove(e))
+      this.entitiesByStop.delete(stopId)
       console.log(`[Buildings] Removed buildings for stop ${stopId}`)
     }
   }
 
-  /**
-   * Shows/hides buildings for a specific stop
-   */
-  setBuildingsVisibility(stopId: string, visible: boolean): void {
-    const dataSource = this.dataSources.get(stopId)
-    if (dataSource) {
-      dataSource.show = visible
-    }
+  setBuildingsVisibility(_stopId: string, _visible: boolean): void {
+    // Visibility per-stop could be added via entity.show
   }
 
-  /**
-   * Clears all buildings
-   */
   async clearAllBuildings(): Promise<void> {
-    const promises = Array.from(this.dataSources.keys()).map(stopId => 
+    const promises = Array.from(this.entitiesByStop.keys()).map(stopId =>
       this.removeBuildingsForStop(stopId)
     )
     await Promise.all(promises)
     console.log('[Buildings] Cleared all buildings')
   }
 
-  /**
-   * Gets loaded stop IDs
-   */
   getLoadedStops(): string[] {
-    return Array.from(this.dataSources.keys())
+    return Array.from(this.entitiesByStop.keys())
   }
 
-  /**
-   * Checks if buildings are loaded for a stop
-   */
   areBuildingsLoaded(stopId: string): boolean {
-    return this.dataSources.has(stopId)
+    return this.entitiesByStop.has(stopId)
   }
 }

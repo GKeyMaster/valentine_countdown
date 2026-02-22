@@ -1,6 +1,11 @@
 import type { Viewer } from 'cesium'
 import { PostProcessStage, Cartesian3 } from 'cesium'
 
+function getFogDebug(): boolean {
+  if (typeof location === 'undefined') return false
+  return new URLSearchParams(location.search).has('fogDebug')
+}
+
 const FRAGMENT_SHADER = `
 uniform sampler2D colorTexture;
 uniform sampler2D depthTexture;
@@ -8,6 +13,7 @@ uniform vec3 u_venueWC;
 uniform float u_fogStart;
 uniform float u_fogEnd;
 uniform vec3 u_fogColor;
+uniform float u_fogDebug;
 
 in vec2 v_textureCoordinates;
 
@@ -26,14 +32,16 @@ void main() {
   float d = length(posEC - venueEC);
   d = min(d, u_fogEnd);
 
-  float start = u_fogStart;
-  float w = 50.0;
-  float fogFactor = 0.0;
-  if (d > start - w) {
-    fogFactor = smoothstep(start - w, u_fogEnd, d);
-  }
+  float fogFactor;
   if (d <= u_fogStart) {
     fogFactor = 0.0;
+  } else {
+    fogFactor = smoothstep(u_fogStart, u_fogEnd, d);
+  }
+
+  if (u_fogDebug > 0.5) {
+    out_FragColor = vec4(vec3(fogFactor), 1.0);
+    return;
   }
 
   vec3 rgb = mix(color.rgb, u_fogColor, fogFactor);
@@ -42,11 +50,15 @@ void main() {
 `
 
 let stage: PostProcessStage | null = null
+let viewerRef: Viewer | null = null
 let venueWCRef: Cartesian3 | null = null
-let fogStartRef = 2000.0
-let fogEndRef = 12000.0
+let fogStartRef = 1200.0
+let fogEndRef = 8000.0
+let hasLoggedFogEnable = false
 
 const FOG_COLOR = new Cartesian3(0.04, 0.06, 0.09)
+/** Slightly lighter than background for fog debug visibility */
+const FOG_COLOR_DEBUG = new Cartesian3(0.08, 0.11, 0.15)
 
 export interface VenueFogAPI {
   setEnabled: (enabled: boolean) => void
@@ -56,9 +68,10 @@ export interface VenueFogAPI {
 
 /**
  * Creates (or returns) the venue-centered radial fog PostProcessStage.
- * Fog starts at u_fogStart (2000m), no fog inside 0–2000m.
+ * No fog inside u_fogStart (1200m); smooth fog from u_fogStart to u_fogEnd (8000m).
  */
 export function ensureVenueFog(viewer: Viewer): VenueFogAPI {
+  viewerRef = viewer
   if (!stage) {
     stage = viewer.scene.postProcessStages.add(
       new PostProcessStage({
@@ -66,9 +79,10 @@ export function ensureVenueFog(viewer: Viewer): VenueFogAPI {
         fragmentShader: FRAGMENT_SHADER,
         uniforms: {
           u_venueWC: () => venueWCRef ?? Cartesian3.ZERO,
-          u_fogStart: () => fogStartRef,
-          u_fogEnd: () => fogEndRef,
-          u_fogColor: FOG_COLOR,
+          u_fogStart: () => (getFogDebug() ? 1200.0 : fogStartRef),
+          u_fogEnd: () => (getFogDebug() ? 8000.0 : fogEndRef),
+          u_fogColor: () => (getFogDebug() ? FOG_COLOR_DEBUG : FOG_COLOR),
+          u_fogDebug: () => (getFogDebug() ? 1.0 : 0.0),
         },
       })
     )
@@ -77,7 +91,13 @@ export function ensureVenueFog(viewer: Viewer): VenueFogAPI {
 
   return {
     setEnabled(enabled: boolean) {
-      if (stage) stage.enabled = enabled
+      if (stage) {
+        stage.enabled = enabled
+        if (enabled && viewerRef && !hasLoggedFogEnable) {
+          hasLoggedFogEnable = true
+          console.log('Fog stage enabled', stage.enabled, 'DepthTexture supported:', viewerRef.scene.context.depthTexture)
+        }
+      }
     },
     setVenue(positionWC: Cartesian3 | null) {
       venueWCRef = positionWC

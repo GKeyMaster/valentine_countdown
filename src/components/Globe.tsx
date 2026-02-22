@@ -354,7 +354,7 @@ export function Globe({
       const stop = stops.find((s) => s.id === selectedStopId)
       if (stop?.lat != null && stop?.lng != null) {
         api.setVenue(Cartesian3.fromDegrees(stop.lng, stop.lat))
-        api.setDistances(2000, 12000)
+        api.setDistances(1200, 8000)
         api.setEnabled(true)
       } else {
         api.setEnabled(false)

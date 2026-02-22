@@ -13,7 +13,7 @@ import { RouteManager } from '../lib/cesium/addRoute'
 import { BuildingManager } from '../lib/cesium/buildingUtils'
 import { AutoRotateController, setOverviewCamera, removeOverviewConstraints, applyOverviewConstraints } from '../lib/cesium/autoRotate'
 import { applyVenueCameraLock, removeVenueCameraLock } from '../lib/cesium/venueCameraLock'
-import { applyCameraConstraints, setupZoomClampListener } from '../lib/cesium/cameraConstraints'
+import { applyCameraConstraints, setupZoomClampListener, VENUE_MAX_ZOOM } from '../lib/cesium/cameraConstraints'
 import { OVERVIEW_DISTANCE_MULTIPLIER } from '../lib/cesium/camera/overview'
 import { getEarthRadius, computeEarthCenteredPoseAboveLatLng } from '../lib/cesium/camera/poses'
 import type { Stop } from '../lib/data/types'
@@ -357,20 +357,34 @@ export function Globe({
     const dest = Cartesian3.fromDegrees(selectedStop.lng, selectedStop.lat, 0)
     const dist = Cartesian3.distance(viewer.camera.positionWC, dest)
     const duration = Math.min(1.15, Math.max(0.45, dist / 3_500_000))
-    const range = 1000
     const offset = new HeadingPitchRange(
       CesiumMath.toRadians(0),
       CesiumMath.toRadians(-40),
-      range
+      VENUE_MAX_ZOOM
     )
 
     const onFlightComplete = () => {
       autoRotateControllerRef.current?.onFlightEnd()
-      // Apply venue camera lock and zoom constraints after flight completes
       const markerEntity = markerManagerRef.current?.getMarkerEntity?.(selectedStopId)
       if (markerEntity && viewer) {
         applyCameraConstraints(viewer, 'venue')
         applyVenueCameraLock(viewer, markerEntity)
+        // Ensure camera lands at max distance (Cesium flyTo can land closer)
+        const entityPos = markerEntity.position?.getValue(viewer.clock.currentTime)
+        if (entityPos) {
+          const camPos = viewer.camera.positionWC
+          const dist = Cartesian3.distance(camPos, entityPos)
+          if (dist < VENUE_MAX_ZOOM - 10) {
+            viewer.flyTo(markerEntity, {
+              offset: new HeadingPitchRange(
+                CesiumMath.toRadians(0),
+                CesiumMath.toRadians(-40),
+                VENUE_MAX_ZOOM
+              ),
+              duration: 0.3,
+            })
+          }
+        }
       }
     }
 
@@ -380,7 +394,7 @@ export function Globe({
       viewer.flyTo(markerEntity, { duration, offset }).then(onFlightComplete).catch(onFlightComplete)
     } else {
       viewer.camera.flyTo({
-        destination: Cartesian3.fromDegrees(selectedStop.lng, selectedStop.lat, range),
+        destination: Cartesian3.fromDegrees(selectedStop.lng, selectedStop.lat, VENUE_MAX_ZOOM),
         orientation: { heading: 0, pitch: CesiumMath.toRadians(-40), roll: 0 },
         duration,
         easingFunction: EasingFunction.QUADRATIC_IN_OUT,

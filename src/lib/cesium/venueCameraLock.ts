@@ -17,7 +17,7 @@ export function applyVenueCameraLock(viewer: Viewer, entity: Entity): void {
 
   viewer.trackedEntity = entity
   controller.enableTranslate = false
-  controller.enableLook = false
+  controller.enableLook = true
   controller.enableTilt = true
   controller.enableRotate = true
   controller.enableZoom = true

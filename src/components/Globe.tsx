@@ -4,7 +4,9 @@ import {
   Cartesian3, 
   Math as CesiumMath, 
   HeadingPitchRange,
-  EasingFunction
+  EasingFunction,
+  Transforms,
+  Matrix4
 } from 'cesium'
 import { createViewer, setMapMode } from '../lib/cesium/createViewer'
 import { VenueMarkerManager, type MarkerHoverInfo } from '../lib/cesium/markerUtils'
@@ -357,21 +359,26 @@ export function Globe({
     const dest = Cartesian3.fromDegrees(selectedStop.lng, selectedStop.lat, 0)
     const dist = Cartesian3.distance(viewer.camera.positionWC, dest)
     const duration = Math.min(1.15, Math.max(0.45, dist / 3_500_000))
-    const range = 1500
-    const pitchDeg = -32
+    // Default venue view: max zoom (1000m) at 30-35° angle
+    const VENUE_DEFAULT_RANGE = 1000
+    const VENUE_DEFAULT_PITCH_DEG = -32.5
     const offset = new HeadingPitchRange(
       CesiumMath.toRadians(0),
-      CesiumMath.toRadians(pitchDeg),
-      range
+      CesiumMath.toRadians(VENUE_DEFAULT_PITCH_DEG),
+      VENUE_DEFAULT_RANGE
     )
 
     const onFlightComplete = () => {
       autoRotateControllerRef.current?.onFlightEnd()
-      // Apply venue camera lock and zoom constraints after flight completes
       const markerEntity = markerManagerRef.current?.getMarkerEntity?.(selectedStopId)
       if (markerEntity && viewer) {
         applyCameraConstraints(viewer, 'venue')
         applyVenueCameraLock(viewer, markerEntity)
+        // Pin camera to desired offset to prevent Cesium default from snapping to nadir
+        const pos = markerEntity.position?.getValue(viewer.clock.currentTime)
+        if (pos) {
+          viewer.camera.lookAt(pos, new HeadingPitchRange(0, CesiumMath.toRadians(VENUE_DEFAULT_PITCH_DEG), VENUE_DEFAULT_RANGE))
+        }
       }
     }
 
@@ -380,9 +387,17 @@ export function Globe({
     if (markerEntity) {
       viewer.flyTo(markerEntity, { duration, offset }).then(onFlightComplete).catch(onFlightComplete)
     } else {
+      const venuePos = Cartesian3.fromDegrees(selectedStop.lng, selectedStop.lat, 0)
+      const transform = Transforms.eastNorthUpToFixedFrame(venuePos)
+      const pitchRad = CesiumMath.toRadians(VENUE_DEFAULT_PITCH_DEG)
+      const offsetNorth = -VENUE_DEFAULT_RANGE * Math.cos(-pitchRad)
+      const offsetUp = VENUE_DEFAULT_RANGE * Math.sin(-pitchRad)
+      const cameraDest = Matrix4.multiplyByPoint(transform, new Cartesian3(0, offsetNorth, offsetUp), new Cartesian3())
+      const direction = Cartesian3.normalize(Cartesian3.subtract(venuePos, cameraDest, new Cartesian3()), new Cartesian3())
+      const up = Cartesian3.normalize(cameraDest, new Cartesian3())
       viewer.camera.flyTo({
-        destination: Cartesian3.fromDegrees(selectedStop.lng, selectedStop.lat, range),
-        orientation: { heading: 0, pitch: CesiumMath.toRadians(pitchDeg), roll: 0 },
+        destination: cameraDest,
+        orientation: { direction, up },
         duration,
         easingFunction: EasingFunction.QUADRATIC_IN_OUT,
         complete: onFlightComplete,

@@ -39,6 +39,7 @@ export function applyCameraConstraints(viewer: Viewer, viewMode: ViewMode): void
 
 /**
  * Ensures camera stays at or above the ellipsoid surface (for venue mode with collision disabled).
+ * Uses a safe up vector to avoid singular view matrix (direction ∥ up causes non-invertible matrix).
  */
 function clampCameraAboveSurface(viewer: Viewer): void {
   if (currentViewMode !== 'venue') return
@@ -51,12 +52,28 @@ function clampCameraAboveSurface(viewer: Viewer): void {
 
   carto.height = MIN_HEIGHT_ABOVE_SURFACE
   const surfacePos = ellipsoid.cartographicToCartesian(carto)
+  const direction = Cartesian3.normalize(camera.directionWC, new Cartesian3())
+
+  const radial = Cartesian3.normalize(surfacePos, new Cartesian3())
+  const east = Cartesian3.cross(Cartesian3.UNIT_Z, radial, new Cartesian3())
+  const eastMag = Cartesian3.magnitude(east)
+  let up: Cartesian3
+
+  const eastNorm = eastMag >= 1e-10 ? Cartesian3.normalize(east, east) : Cartesian3.UNIT_X
+  up = Cartesian3.cross(direction, eastNorm, new Cartesian3())
+  const upMag = Cartesian3.magnitude(up)
+  if (upMag < 1e-10) {
+    up = Cartesian3.cross(direction, radial, new Cartesian3())
+    const upMag2 = Cartesian3.magnitude(up)
+    if (upMag2 < 1e-10) up = Cartesian3.clone(Cartesian3.UNIT_X, new Cartesian3())
+    else Cartesian3.normalize(up, up)
+  } else {
+    Cartesian3.normalize(up, up)
+  }
+
   camera.setView({
     destination: surfacePos,
-    orientation: {
-      direction: camera.directionWC,
-      up: camera.upWC,
-    },
+    orientation: { direction, up },
   })
 }
 

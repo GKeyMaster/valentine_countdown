@@ -182,9 +182,14 @@ export function Globe({
         // Initialize building manager
         buildingManagerRef.current = new BuildingManager(result.viewer)
 
-        // Initial view: above equator (side view, not northern or southern pole)
+        // Initial view: above equator, on same meridian as first stop
         autoRotateControllerRef.current = new AutoRotateController(result.viewer)
-        const initialAnchor = { lon: 0, lat: 0 }
+        const currentStops = stopsRef.current
+        const firstStop = currentStops.length > 0
+          ? [...currentStops].sort((a, b) => a.order - b.order)[0]
+          : null
+        const lon = firstStop && typeof firstStop.lng === 'number' ? firstStop.lng : 0
+        const initialAnchor = { lon, lat: 0 }
         autoRotateControllerRef.current.initialize(initialAnchor)
 
         // Initialize markers and routes if stops are available

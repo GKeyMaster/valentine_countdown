@@ -16,6 +16,10 @@ import { BuildingManager } from '../lib/cesium/buildingUtils'
 import { AutoRotateController, setOverviewCamera, removeOverviewConstraints, applyOverviewConstraints } from '../lib/cesium/autoRotate'
 import { applyVenueCameraLock, removeVenueCameraLock } from '../lib/cesium/venueCameraLock'
 import { applyVenueFog } from '../lib/cesium/venueFog'
+import {
+  createVenueImageryLayer,
+  animateVenueLayerAlpha,
+} from '../lib/cesium/imagery/venueImagery'
 import { applyCameraConstraints, setupZoomClampListener } from '../lib/cesium/cameraConstraints'
 import { OVERVIEW_DISTANCE_MULTIPLIER } from '../lib/cesium/camera/overview'
 import { getEarthRadius, computeEarthCenteredPoseAboveLatLng } from '../lib/cesium/camera/poses'
@@ -53,6 +57,7 @@ export function Globe({
   const cameraManagerRef = useRef<PremiumCameraManager | null>(null)
   const routeManagerRef = useRef<RouteManager | null>(null)
   const buildingManagerRef = useRef<BuildingManager | null>(null)
+  const venueImageryLayerRef = useRef<ImageryLayer | null>(null)
   const autoRotateControllerRef = useRef<AutoRotateController | null>(null)
   const zoomClampCleanupRef = useRef<(() => void) | null>(null)
   const initOnceRef = useRef(false)
@@ -345,6 +350,38 @@ export function Globe({
       viewerRef.current.scene.requestRender()
     }
   }, [viewMode, isReady])
+
+  // Venue imagery: photo-from-above layer, limited to venue region
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer || !isReady) return
+
+    if (viewMode === 'venue' && selectedStopId && stops.length > 0) {
+      const selectedStop = stops.find((s) => s.id === selectedStopId)
+      if (!selectedStop?.lat || !selectedStop?.lng) return
+
+      const existing = venueImageryLayerRef.current
+      if (existing) {
+        viewer.imageryLayers.remove(existing, true)
+        venueImageryLayerRef.current = null
+      }
+
+      const layer = createVenueImageryLayer(viewer, selectedStop)
+      venueImageryLayerRef.current = layer
+      animateVenueLayerAlpha(layer, 1, 600, viewer)
+    } else {
+      const layer = venueImageryLayerRef.current
+      if (layer) {
+        venueImageryLayerRef.current = null
+        animateVenueLayerAlpha(layer, 0, 600, viewer).then(() => {
+          if (viewer.imageryLayers.contains(layer)) {
+            viewer.imageryLayers.remove(layer, true)
+          }
+          viewer.scene.requestRender()
+        })
+      }
+    }
+  }, [viewMode, selectedStopId, stops, isReady])
 
   // Fly to selected stop when selection changes (direct viewer.flyTo)
   useEffect(() => {

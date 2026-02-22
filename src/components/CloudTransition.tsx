@@ -1,169 +1,195 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useImperativeHandle, forwardRef, useState, useCallback, useEffect } from 'react'
 
-/** Simple deterministic hash for value noise. */
-function hash(x: number, y: number): number {
-  const n = x * 374761393 + y * 668265263
-  return ((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 0x7fffffff
+const OPAQUE_THRESHOLD = 0.98
+const FADE_MS = 350
+const DRIFT_SPEED = 0.03
+const OPAQUE_DRIFT_SPEED = 0.02
+
+const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()))
+
+/** Premium cloud layer gradients (no images, GPU-friendly) */
+const CLOUD_GRADIENT_1 =
+  'radial-gradient(ellipse 90% 60% at 15% 25%, rgba(255,255,255,0.95) 0%, transparent 55%),' +
+  'radial-gradient(ellipse 70% 50% at 75% 45%, rgba(255,255,255,0.9) 0%, transparent 50%),' +
+  'radial-gradient(ellipse 55% 35% at 45% 75%, rgba(255,255,255,0.85) 0%, transparent 45%)'
+const CLOUD_GRADIENT_2 =
+  'radial-gradient(ellipse 80% 45% at 85% 30%, rgba(255,255,255,0.92) 0%, transparent 50%),' +
+  'radial-gradient(ellipse 65% 55% at 25% 60%, rgba(255,255,255,0.88) 0%, transparent 48%),' +
+  'radial-gradient(ellipse 50% 40% at 60% 85%, rgba(255,255,255,0.82) 0%, transparent 42%)'
+const VIGNETTE =
+  'radial-gradient(ellipse 80% 80% at 50% 50%, transparent 30%, rgba(0,0,0,0.25) 100%)'
+
+export interface CloudTransitionHandle {
+  playIn(): Promise<void>
+  playOut(): Promise<void>
+  isOpaque(): boolean
+  onOpaqueOnce(): Promise<void>
 }
 
-/** Smooth interpolation. */
-function smoothstep(t: number): number {
+function easeSmoothstep(t: number): number {
   return t * t * (3 - 2 * t)
 }
 
-/** Value noise at (x, y) with integer grid. */
-function valueNoise(x: number, y: number): number {
-  const ix = Math.floor(x)
-  const iy = Math.floor(y)
-  const fx = x - ix
-  const fy = y - iy
-  const sx = smoothstep(fx)
-  const sy = smoothstep(fy)
-
-  const n00 = hash(ix, iy)
-  const n10 = hash(ix + 1, iy)
-  const n01 = hash(ix, iy + 1)
-  const n11 = hash(ix + 1, iy + 1)
-
-  const nx0 = n00 + sx * (n10 - n00)
-  const nx1 = n01 + sx * (n11 - n01)
-  return nx0 + sy * (nx1 - nx0)
-}
-
-/** Fractal Brownian motion for cloud-like variation. */
-function fbm(x: number, y: number, octaves = 4): number {
-  let v = 0
-  let f = 1
-  let a = 1
-  let sumA = 0
-  for (let i = 0; i < octaves; i++) {
-    v += a * valueNoise(x * f, y * f)
-    sumA += a
-    a *= 0.5
-    f *= 2
-  }
-  return v / sumA
-}
-
-export interface CloudTransitionProps {
-  active: boolean
-  phase: 'in' | 'out'
-}
-
-const FADE_MS = 400
-const DRIFT_SPEED = 0.15
-
-export function CloudTransition({ active, phase }: CloudTransitionProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [opacity, setOpacity] = useState(0)
-  const fadeAnimRef = useRef<number>(0)
-  const drawAnimRef = useRef<number>(0)
-  const timeRef = useRef(0)
+export const CloudTransition = forwardRef<CloudTransitionHandle>(function CloudTransition(_, ref) {
+  const [visible, setVisible] = useState(false)
   const opacityRef = useRef(0)
-  opacityRef.current = opacity
+  const driftXRef = useRef(0)
+  const driftYRef = useRef(0)
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const fadeRafRef = useRef<number>(0)
+  const driftRafRef = useRef<number>(0)
+  const prefersReducedMotion = useRef(false)
+  const highDpr = useRef(false)
 
   useEffect(() => {
-    if (!active) {
-      setOpacity(0)
-      return
-    }
+    if (typeof window === 'undefined') return
+    prefersReducedMotion.current = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    highDpr.current = (window.devicePixelRatio || 1) > 1.5
+  }, [])
 
-    const start = performance.now()
-
-    const tick = (now: number) => {
-      const elapsed = now - start
-      const t = Math.min(1, elapsed / FADE_MS)
-      const eased = t * t * (3 - 2 * t)
-      const next = phase === 'in' ? eased : 1 - eased
-      setOpacity(next)
-      if (t < 1) fadeAnimRef.current = requestAnimationFrame(tick)
+  const updateStyles = useCallback(() => {
+    const el = containerRef.current
+    if (!el) return
+    el.style.opacity = String(opacityRef.current)
+    if (!prefersReducedMotion.current) {
+      el.style.transform = `translate3d(${driftXRef.current}px, ${driftYRef.current}px, 0)`
     }
-    fadeAnimRef.current = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(fadeAnimRef.current)
-  }, [active, phase])
+  }, [])
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      playIn(): Promise<void> {
+        setVisible(true)
+        opacityRef.current = 0
+        driftXRef.current = 0
+        driftYRef.current = 0
+
+        return new Promise<void>((resolve) => {
+          const waitForMount = () => {
+            if (!containerRef.current) {
+              requestAnimationFrame(waitForMount)
+              return
+            }
+            nextFrame().then(() => {
+              const start = performance.now()
+              const tick = (now: number) => {
+                const elapsed = now - start
+                const t = Math.min(1, elapsed / FADE_MS)
+                const eased = easeSmoothstep(t)
+                opacityRef.current = eased
+                if (!prefersReducedMotion.current) {
+                  driftXRef.current = elapsed * DRIFT_SPEED * 10
+                  driftYRef.current = elapsed * DRIFT_SPEED * 6
+                }
+                updateStyles()
+                if (t >= 1) resolve()
+                else fadeRafRef.current = requestAnimationFrame(tick)
+              }
+              fadeRafRef.current = requestAnimationFrame(tick)
+            })
+          }
+          requestAnimationFrame(waitForMount)
+        })
+      },
+      playOut(): Promise<void> {
+        return new Promise<void>((resolve) => {
+          const start = performance.now()
+          const tick = (now: number) => {
+            const elapsed = now - start
+            const t = Math.min(1, elapsed / FADE_MS)
+            const eased = easeSmoothstep(t)
+            opacityRef.current = 1 - eased
+            if (!prefersReducedMotion.current) {
+              const baseX = FADE_MS * DRIFT_SPEED * 10
+              const baseY = FADE_MS * DRIFT_SPEED * 6
+              driftXRef.current = baseX + elapsed * OPAQUE_DRIFT_SPEED * 10
+              driftYRef.current = baseY + elapsed * OPAQUE_DRIFT_SPEED * 6
+            }
+            updateStyles()
+            if (t >= 1) {
+              setVisible(false)
+              resolve()
+            } else {
+              fadeRafRef.current = requestAnimationFrame(tick)
+            }
+          }
+          fadeRafRef.current = requestAnimationFrame(tick)
+        })
+      },
+      isOpaque(): boolean {
+        return opacityRef.current >= OPAQUE_THRESHOLD
+      },
+      onOpaqueOnce(): Promise<void> {
+        if (opacityRef.current >= OPAQUE_THRESHOLD) return Promise.resolve()
+        return new Promise((resolve) => {
+          const check = () => {
+            if (opacityRef.current >= OPAQUE_THRESHOLD) resolve()
+            else requestAnimationFrame(check)
+          }
+          requestAnimationFrame(check)
+        })
+      },
+    }),
+    [updateStyles]
+  )
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas || !active) return
-
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-
-    const resize = () => {
-      const dpr = Math.min(2, window.devicePixelRatio || 1)
-      const w = window.innerWidth
-      const h = window.innerHeight
-      canvas.width = w * dpr
-      canvas.height = h * dpr
-      canvas.style.width = `${w}px`
-      canvas.style.height = `${h}px`
-    }
-    resize()
-    window.addEventListener('resize', resize)
-
-    const scale = 0.003
-    const baseAlpha = 0.85
-
-    const draw = () => {
-      timeRef.current += 0.016
-      const t = timeRef.current * DRIFT_SPEED
-      const w = canvas.width
-      const h = canvas.height
-      const currentOpacity = opacityRef.current
-
-      ctx.clearRect(0, 0, w, h)
-
-      const imageData = ctx.createImageData(w, h)
-      const data = imageData.data
-
-      for (let py = 0; py < h; py++) {
-        for (let px = 0; px < w; px++) {
-          const x = px * scale + t * 50
-          const y = py * scale + t * 30
-          const n = fbm(x, y)
-          const cloud = Math.pow(Math.max(0, n - 0.35) * 2.5, 1.2)
-          const a = Math.min(1, cloud) * baseAlpha * currentOpacity
-          const i = (py * w + px) * 4
-          data[i] = 255
-          data[i + 1] = 255
-          data[i + 2] = 255
-          data[i + 3] = Math.round(a * 255)
-        }
-      }
-      ctx.putImageData(imageData, 0, 0)
-      drawAnimRef.current = requestAnimationFrame(draw)
-    }
-    draw()
-
     return () => {
-      window.removeEventListener('resize', resize)
-      cancelAnimationFrame(drawAnimRef.current)
+      cancelAnimationFrame(fadeRafRef.current)
+      cancelAnimationFrame(driftRafRef.current)
     }
-  }, [active])
+  }, [])
 
-  if (!active) return null
+  if (!visible) return null
+
+  const bgSize = highDpr.current ? '120%' : 'cover'
+  const cloudLayerStyle: React.CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    backgroundSize: bgSize,
+    backgroundPosition: 'center',
+    willChange: 'opacity, transform',
+  }
 
   return (
     <div
+      ref={(el) => {
+        containerRef.current = el
+      }}
+      className="cloud-transition-overlay"
       style={{
         position: 'fixed',
         inset: 0,
         zIndex: 9999,
         pointerEvents: 'none',
         overflow: 'hidden',
+        opacity: 0,
+        willChange: 'opacity, transform',
       }}
     >
-      <canvas
-        ref={canvasRef}
+      <div
+        className="cloudLayer cloudLayer1"
         style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
+          ...cloudLayerStyle,
+          backgroundImage: CLOUD_GRADIENT_1,
+        }}
+      />
+      <div
+        className="cloudLayer cloudLayer2"
+        style={{
+          ...cloudLayerStyle,
+          backgroundImage: CLOUD_GRADIENT_2,
+        }}
+      />
+      <div
+        className="cloudLayer cloudLayerVignette"
+        style={{
+          ...cloudLayerStyle,
+          backgroundImage: VIGNETTE,
+          backgroundSize: 'cover',
         }}
       />
     </div>
   )
-}
+})

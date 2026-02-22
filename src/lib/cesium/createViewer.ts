@@ -26,6 +26,23 @@ function easeInOutQuad(t: number): number {
   return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
 }
 
+/** Instant imagery swap (no animation). Use when clouds fully cover the screen. */
+export function setMapModeInstant(
+  mode: MapMode,
+  gibsLayer: ImageryLayer,
+  osmLayer: ImageryLayer,
+  options?: { routeEntities?: Array<{ show: unknown }> }
+): void {
+  gibsLayer.alpha = mode === 'overview' ? 1 : 0
+  osmLayer.alpha = mode === 'venue' ? 1 : 0
+  if (options?.routeEntities) {
+    const show = mode === 'overview'
+    options.routeEntities.forEach((e) => {
+      ;(e as { show: unknown }).show = new ConstantProperty(show)
+    })
+  }
+}
+
 /** Crossfade imagery layers over 350ms. overview: GIBS visible; venue: OSM visible. */
 export function setMapMode(
   mode: MapMode,

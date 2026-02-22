@@ -176,20 +176,24 @@ export class VenueMarkerManager {
       this.viewer.selectedEntity = undefined
       this.viewer.trackedEntity = undefined
       
-      const pickedObject = this.viewer.scene.pick(event.position)
-      
-      if (defined(pickedObject) && defined(pickedObject.id)) {
-        const entity = pickedObject.id as Entity
-        
-        // Check if this is a venue marker
-        if (entity.properties?.isVenueMarker?.getValue()) {
-          const stopId = entity.properties.stopId.getValue()
-          console.log(`[Markers] Clicked venue marker: ${stopId}`)
-          
-          if (this.onMarkerClick) {
-            this.onMarkerClick(stopId)
-          }
+      const picked = this.viewer.scene.pick(event.position)
+      if (!defined(picked)) return
+
+      const id = picked.id
+      const entity = typeof id === 'object' && id !== null ? (id as Entity) : undefined
+      const stopId: string | null =
+        typeof id === 'string'
+          ? id
+          : entity?.id ?? entity?.properties?.stopId?.getValue?.() ?? null
+
+      if (!stopId) return
+      const isVenueMarker = entity?.properties?.isVenueMarker?.getValue?.()
+
+      if (isVenueMarker && this.onMarkerClick) {
+        if (import.meta.env?.DEV) {
+          console.log('Select stop from marker', stopId)
         }
+        this.onMarkerClick(stopId)
       }
       
       // Test note: Open DevTools and verify viewer.selectedEntity stays undefined after clicking markers

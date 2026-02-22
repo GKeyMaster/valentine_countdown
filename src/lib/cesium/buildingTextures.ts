@@ -45,12 +45,21 @@ function preloadTextures(): Promise<void> {
   if (preloadPromise) return preloadPromise
   const urls = [facade1Url, facade2Url, roof1Url] as const
   preloadPromise = Promise.allSettled(urls.map((u) => preloadImage(u))).then((results) => {
+    const imgs = results
+      .filter((r): r is PromiseFulfilledResult<HTMLImageElement> => r.status === 'fulfilled')
+      .map((r) => r.value)
     const failed = results
       .map((r, i) => (r.status === 'rejected' ? urls[i] : null))
       .filter((u): u is string => u != null)
     if (failed.length > 0) {
       failed.forEach((u) => console.warn('[Buildings] Texture preload failed:', u))
       useFallbackProcedural = true
+    } else if (imgs.length >= 3) {
+      console.log('Texture decoded sizes', {
+        facade1: `${imgs[0].width}x${imgs[0].height}`,
+        facade2: `${imgs[1].width}x${imgs[1].height}`,
+        roof1: `${imgs[2].width}x${imgs[2].height}`,
+      })
     }
   })
   return preloadPromise
@@ -65,25 +74,15 @@ export function ensureTexturesReady(): Promise<void> {
 }
 
 function getFallbackFacadeColor(hash: number): Color {
-  const t = (hash % 21) / 20
-  const mult = 0.85 + t * 0.25
-  return Color.fromBytes(
-    Math.round(90 * mult),
-    Math.round(90 * mult),
-    Math.round(95 * mult),
-    255
-  )
+  const brightness = 0.92 + ((hash % 1000) / 1000) * 0.12
+  const b = Math.min(255, Math.round(255 * brightness))
+  return Color.fromBytes(b, b, b, 255)
 }
 
 function getFallbackRoofColor(hash: number): Color {
-  const t = ((hash >> 8) % 21) / 20
-  const mult = 0.92 + t * 0.18
-  return Color.fromBytes(
-    Math.round(100 * mult),
-    Math.round(100 * mult),
-    Math.round(105 * mult),
-    255
-  )
+  const brightness = 0.94 + (((hash >> 8) % 1000) / 1000) * 0.1
+  const b = Math.min(255, Math.round(255 * brightness))
+  return Color.fromBytes(b, b, b, 255)
 }
 
 /**
@@ -105,30 +104,15 @@ function chooseFacadeTexturePath(hash: number): string {
   return (hash % 2) === 0 ? facade1Url : facade2Url
 }
 
-/**
- * Tint color for facade: subtle brightness 0.85..1.05
- */
-function getFacadeTint(hash: number): Color {
-  const t = (hash % 21) / 20 // 0..1
-  const brightness = 0.85 + t * 0.2
-  const b = Math.round(255 * brightness)
-  return Color.fromBytes(b, b, Math.round(b * 0.98), 255)
+/** Brightness multiplier: 0.92..1.04, applied to WHITE for neutral texture multiplication */
+function getTint(hash: number): Color {
+  const brightness = 0.92 + ((hash % 1000) / 1000) * 0.12
+  const b = Math.min(255, Math.round(255 * brightness))
+  return Color.fromBytes(b, b, b, 255)
 }
 
 /**
- * Tint color for roof: subtle brightness
- */
-function getRoofTint(hash: number): Color {
-  const t = ((hash >> 8) % 21) / 20
-  const brightness = 0.88 + t * 0.14
-  const b = Math.round(255 * brightness)
-  return Color.fromBytes(b, b, Math.round(b * 0.96), 255)
-}
-
-/**
- * Get facade material. Reuses cached ImageMaterialProperty; per-building variation via color only.
- * Note: Shared material + per-entity color would require CallbackProperty with entity context (not available).
- * We create new materials with shared URLs; Cesium caches textures.
+ * Get facade material. Color.WHITE base; subtle brightness 0.92..1.04 via tint.
  */
 export function getFacadeMaterial(hash: number): MaterialProperty {
   if (useFallbackProcedural) {
@@ -138,12 +122,12 @@ export function getFacadeMaterial(hash: number): MaterialProperty {
   return new ImageMaterialProperty({
     image,
     repeat: new Cartesian2(4, 1),
-    color: new ConstantProperty(getFacadeTint(hash)),
+    color: new ConstantProperty(getTint(hash)),
   })
 }
 
 /**
- * Get roof material. Same pattern; roof slightly lighter when fallback.
+ * Get roof material. Same; Color.WHITE base with subtle brightness.
  */
 export function getRoofMaterial(hash: number): MaterialProperty {
   if (useFallbackProcedural) {
@@ -152,6 +136,6 @@ export function getRoofMaterial(hash: number): MaterialProperty {
   return new ImageMaterialProperty({
     image: roof1Url,
     repeat: new Cartesian2(2, 2),
-    color: new ConstantProperty(getRoofTint(hash)),
+    color: new ConstantProperty(getTint(hash)),
   })
 }

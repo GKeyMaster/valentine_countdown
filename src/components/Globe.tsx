@@ -15,7 +15,7 @@ import { RouteManager } from '../lib/cesium/addRoute'
 import { BuildingManager } from '../lib/cesium/buildingUtils'
 import { AutoRotateController, setOverviewCamera, removeOverviewConstraints, applyOverviewConstraints } from '../lib/cesium/autoRotate'
 import { applyVenueCameraLock, removeVenueCameraLock } from '../lib/cesium/venueCameraLock'
-import { enableVenueFog, disableVenueFog } from '../lib/cesium/fogStage'
+import { enableVenueFog, disableVenueFog } from '../lib/cesium/venueFogStage'
 import { applyCameraConstraints, setupZoomClampListener } from '../lib/cesium/cameraConstraints'
 import { OVERVIEW_DISTANCE_MULTIPLIER } from '../lib/cesium/camera/overview'
 import { getEarthRadius, computeEarthCenteredPoseAboveLatLng } from '../lib/cesium/camera/poses'
@@ -338,18 +338,20 @@ export function Globe({
     }
   }, [viewMode, isReady])
 
-  // Venue fog: depth-based post-process (visible); scene fog disabled to avoid double fog
+  // Venue fog: venue-centered depth-based post-process; scene.fog disabled to avoid double fog
   useEffect(() => {
-    if (viewerRef.current && isReady) {
-      if (viewMode === 'venue') {
-        viewerRef.current.scene.fog.enabled = false
-        enableVenueFog(viewerRef.current)
-      } else {
-        disableVenueFog(viewerRef.current)
+    if (!viewerRef.current || !isReady) return
+    if (viewMode === 'venue' && selectedStopId && stops.length > 0) {
+      const selectedStop = stops.find((s) => s.id === selectedStopId)
+      if (selectedStop?.lat != null && selectedStop?.lng != null) {
+        const venueWC = Cartesian3.fromDegrees(selectedStop.lng, selectedStop.lat, 0)
+        enableVenueFog(viewerRef.current, venueWC, { startMeters: 2000, endMeters: 12000 })
       }
-      viewerRef.current.scene.requestRender()
+    } else {
+      disableVenueFog(viewerRef.current)
     }
-  }, [viewMode, isReady])
+    viewerRef.current.scene.requestRender()
+  }, [viewMode, selectedStopId, stops, isReady])
 
   // Fly to selected stop when selection changes (direct viewer.flyTo)
   useEffect(() => {

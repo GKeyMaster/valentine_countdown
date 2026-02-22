@@ -5,6 +5,7 @@ import {
   PolygonHierarchy,
   ConstantProperty,
   Ellipsoid,
+  ShadowMode,
 } from 'cesium'
 import type { Stop } from '../data/types'
 import { stableHash, getFacadeMaterial, getRoofMaterial, ensureTexturesReady } from './buildingTextures'
@@ -153,6 +154,7 @@ export class BuildingManager {
         // 1) Wall entity
         const wallEntity = this.viewer.entities.add({
           name: `building-wall-${stopId}-${i}`,
+          shadows: ShadowMode.DISABLED,
           wall: {
             positions: new ConstantProperty(positions),
             minimumHeights: new ConstantProperty(minHeights),
@@ -167,6 +169,7 @@ export class BuildingManager {
         // 2) Roof polygon entity
         const roofEntity = this.viewer.entities.add({
           name: `building-roof-${stopId}-${i}`,
+          shadows: ShadowMode.DISABLED,
           polygon: {
             hierarchy: new ConstantProperty(new PolygonHierarchy(positions)),
             height: new ConstantProperty(height),
